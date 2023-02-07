@@ -34,9 +34,10 @@ void setup()
     // update every second
     gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); 
 
-    if (!bmp.begin_I2C())
+    if (!bmp.begin_I2C(0x77, &Wire))
     {
-        Serial.println("no bmp :(");
+        tft.println("no bmp :(");
+        //while (1) {}
     }
 
     bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
@@ -76,8 +77,10 @@ void loop()
     tft.print("year: ");
     tft.println(gps.year);
 
-    tft.print("bmp: ");
-    tft.println(bmp.readTemperature());
+    //bmp.readTemperature();
+
+    //tft.print("bmp: ");
+    //tft.println(bmp.temperature);
     
     delay(10);
 }
