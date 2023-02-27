@@ -3,11 +3,15 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_GPS.h>
 #include <Adafruit_BMP3XX.h>
+#include <AccelStepper.h>
 
 // Initialize Adafruit ST7789 TFT library
 Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
 Adafruit_GPS gps = Adafruit_GPS(&Serial1);
 Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
+
+AccelStepper motor1(1, 8, 9);
+AccelStepper motor2(1, 14, 15);
 
 void setup()
 {
@@ -34,17 +38,13 @@ void setup()
     // update every second
     gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); 
 
-    if (!bmp.begin_I2C(0x77, &Wire))
-    {
-        tft.println("no bmp :(");
-        //while (1) {}
-    }
+    motor1.setAcceleration(20);
+    motor1.setMaxSpeed(400);
+    motor2.setAcceleration(20);
+    motor2.setMaxSpeed(400);
 
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-  
+    pinMode(22, OUTPUT);
+    digitalWrite(22, HIGH);
 }
 
 int color = 0;
@@ -55,7 +55,7 @@ void loop()
     tft.setCursor(0, 12);
 
     // read gps
-    char c = gps.read();
+    gps.read();
 
     if (gps.newNMEAreceived())
     {
@@ -82,5 +82,11 @@ void loop()
     //tft.print("bmp: ");
     //tft.println(bmp.temperature);
     
-    delay(10);
+    motor1.setSpeed(200);
+    motor1.runSpeed();
+
+    motor2.setSpeed(200);
+    motor2.runSpeed();
+
+    //delay(1);
 }
