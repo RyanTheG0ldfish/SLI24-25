@@ -20,22 +20,21 @@ boolean usingInterrupt = false;
 void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
 
 // Initialize Adafruit ST7789 TFT library
-Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
-Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
+//Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
+//Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
 
-AccelStepper motor1(1, 8, 9);
-AccelStepper motor2(1, 14, 15);
+//AccelStepper motor1(1, 8, 9);
+//AccelStepper motor2(1, 14, 15);
 
 void setup()
 {
      // connect at 115200 so we can read the GPS fast enough and echo without dropping chars
   // also spit it out
   Serial.begin(115200);
-  Serial.println("Adafruit GPS library basic test!");
 
   // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
   GPS.begin(9600);
-  mySerial.begin(9600);
+ // mySerial.begin(9600);
   
   // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
@@ -67,23 +66,23 @@ void setup()
   mySerial.println(PMTK_Q_RELEASE);
 
     // set up screen
-    tft.init(172, 320);
-    tft.setRotation(3);
+   // tft.init(172, 320);
+   // tft.setRotation(3);
 
-    tft.setCursor(0, 12);
-    tft.setTextColor(0xffff, 0x0000);
-    tft.setTextSize(2);
-    tft.setTextWrap(true);
+   // tft.setCursor(0, 12);
+   // tft.setTextColor(0xffff, 0x0000);
+   // tft.setTextSize(2);
+   // tft.setTextWrap(true);
 
-    tft.fillRect(0, 0, 320, 172, 0x0000);
+   // tft.fillRect(0, 0, 320, 172, 0x0000);
 
-    motor1.setAcceleration(20);
-    motor1.setMaxSpeed(400);
-    motor2.setAcceleration(20);
-    motor2.setMaxSpeed(400);
+   // motor1.setAcceleration(20);
+   // motor1.setMaxSpeed(400);
+   // motor2.setAcceleration(20);
+   // motor2.setMaxSpeed(400);
 
-    pinMode(22, OUTPUT);
-    digitalWrite(22, HIGH);
+   // pinMode(22, OUTPUT);
+   // digitalWrite(22, HIGH);
 }
 
 #ifdef __AVR__
@@ -114,7 +113,7 @@ void useInterrupt(boolean v) {
 }
 #endif //#ifdef__AVR__
 
-int color = 0;
+//int color = 0;
 
 uint32_t timer = millis();
 
@@ -173,22 +172,19 @@ void loop()
   }
 
     // clear screen
-    tft.setCursor(0, 12);
-
-    tft.print("sad: ");
-    tft.println((int)GPS.satellites);
-
-    tft.print("year: ");
-    tft.println(GPS.year, DEC);
-
+//    tft.setCursor(0, 12);
+ //   tft.print("sad: ");
+//    tft.println((int)GPS.satellites);
+//    tft.print("year: ");
+//    tft.println(GPS.year, DEC);
     //bmp.readTemperature();
 
     //tft.print("bmp: ");
     //tft.println(bmp.temperature);
     
-    motor1.setSpeed(200);
-    motor1.runSpeed();
+//    motor1.setSpeed(200);
+//    motor1.runSpeed();
 
-    motor2.setSpeed(200);
-    motor2.runSpeed();
+//    motor2.setSpeed(200);
+//    motor2.runSpeed();
 }
