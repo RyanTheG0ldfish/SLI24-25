@@ -4,187 +4,231 @@
 #include <Adafruit_GPS.h>
 #include <Adafruit_BMP3XX.h>
 #include <AccelStepper.h>
-#include <Adafruit_GPS.h>
+#include <TinyGPSPlus.h>
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_Sensor.h>
 
-#define mySerial Serial1
+static const int RXPin = 0, TXPin = 1;
+static const uint32_t GPSBaud = 9600;
 
-Adafruit_GPS GPS(&mySerial);
+TinyGPSPlus gps;
 
-// Set GPSECHO to 'false' to turn off echoing the GPS data to the Serial console
-// Set to 'true' if you want to debug and listen to the raw GPS sentences. 
-#define GPSECHO  true
-
-// this keeps track of whether we're using the interrupt
-// off by default!
-boolean usingInterrupt = false;
-void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
+SoftwareSerial ss(RXPin, TXPin);
 
 // Initialize Adafruit ST7789 TFT library
-//Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
-//Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
+Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
+Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
+#define BMP_SCK 13
+#define BMP_MISO 12
+#define BMP_MOSI 11
+#define BMP_CS 4
 
-//AccelStepper motor1(1, 8, 9);
-//AccelStepper motor2(1, 14, 15);
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+AccelStepper motor1(1, 8, 9);
+AccelStepper motor2(1, 14, 15);
 
 void setup()
 {
-     // connect at 115200 so we can read the GPS fast enough and echo without dropping chars
-  // also spit it out
   Serial.begin(115200);
+    ss.begin(GPSBaud);
 
-  // 9600 NMEA is the default baud rate for Adafruit MTK GPS's- some use 4800
-  GPS.begin(9600);
- // mySerial.begin(9600);
-  
-  // uncomment this line to turn on RMC (recommended minimum) and GGA (fix data) including altitude
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  // uncomment this line to turn on only the "minimum recommended" data
-  //GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCONLY);
-  // For parsing data, we don't suggest using anything but either RMC only or RMC+GGA since
-  // the parser doesn't care about other sentences at this time
-  
-  // Set the update rate
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);   // 1 Hz update rate
-  // For the parsing code to work nicely and have time to sort thru the data, and
-  // print it out we don't suggest using anything higher than 1 Hz
+Serial.println(F("DeviceExample.ino"));
+  Serial.println(F("A simple demonstration of TinyGPSPlus with an attached GPS module"));
+  Serial.print(F("Testing TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  Serial.println(F("by Mikal Hart"));
+  Serial.println();
 
-  // Request updates on antenna status, comment out to keep quiet
-  GPS.sendCommand(PGCMD_ANTENNA);
+//if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
+  if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
+  //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
+    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+    while (1);
+  }
 
-  // the nice thing about this code is you can have a timer0 interrupt go off
-  // every 1 millisecond, and read data from the GPS for you. that makes the
-  // loop code a heck of a lot easier!
-
-#ifdef __arm__
-  usingInterrupt = false;  //NOTE - we don't want to use interrupts on the Due
-#else
-  useInterrupt(true);
-#endif
-
-  delay(1000);
-  // Ask for firmware version
-  mySerial.println(PMTK_Q_RELEASE);
+  // Set up oversampling and filter initialization
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
     // set up screen
-   // tft.init(172, 320);
-   // tft.setRotation(3);
+   tft.init(172, 320);
+   tft.setRotation(3);
 
-   // tft.setCursor(0, 12);
-   // tft.setTextColor(0xffff, 0x0000);
-   // tft.setTextSize(2);
-   // tft.setTextWrap(true);
+   tft.setCursor(0, 12);
+   tft.setTextColor(0xffff, 0x0000);
+tft.setTextSize(2);
+   tft.setTextWrap(true);
 
-   // tft.fillRect(0, 0, 320, 172, 0x0000);
+   tft.fillRect(0, 0, 320, 172, 0x0000);
 
-   // motor1.setAcceleration(20);
-   // motor1.setMaxSpeed(400);
-   // motor2.setAcceleration(20);
-   // motor2.setMaxSpeed(400);
+   motor1.setAcceleration(20);
+   motor1.setMaxSpeed(400);
+    motor2.setAcceleration(20);
+    motor2.setMaxSpeed(400);
 
-   // pinMode(22, OUTPUT);
-   // digitalWrite(22, HIGH);
+    pinMode(22, OUTPUT);
+    digitalWrite(22, HIGH);
+    int color = 0;
 }
 
-#ifdef __AVR__
-// Interrupt is called once a millisecond, looks for any new GPS data, and stores it
-SIGNAL(TIMER0_COMPA_vect) {
-  char c = GPS.read();
-  // if you want to debug, this is a good time to do it!
-#ifdef UDR0
-  if (GPSECHO)
-    if (c) UDR0 = c;  
-    // writing direct to UDR0 is much much faster than Serial.print 
-    // but only one character can be written at a time. 
-#endif
-}
-
-void useInterrupt(boolean v) {
-  if (v) {
-    // Timer0 is already used for millis() - we'll just interrupt somewhere
-    // in the middle and call the "Compare A" function above
-    OCR0A = 0xAF;
-    TIMSK0 |= _BV(OCIE0A);
-    usingInterrupt = true;
-  } else {
-    // do not call the interrupt function COMPA anymore
-    TIMSK0 &= ~_BV(OCIE0A);
-    usingInterrupt = false;
+void displayInfo()
+{
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
   }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+
+    Serial.print("Temperature = ");
+  Serial.print((bmp.temperature * 1.8) + 32);
+  Serial.println(" *F");
+
+  Serial.print("Pressure = ");
+  Serial.print(bmp.pressure / 100.0);
+  Serial.println(" hPa");
+
+  Serial.print("Approx. Altitude = ");
+  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+  Serial.println(" m");
+
+  Serial.println();
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+
+
+
+// TFT STUFF
+    tft.setCursor(0, 12); //clear screen
+  tft.println(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    tft.print(gps.location.lat(), 6);
+    tft.print(F(" N , "));
+    tft.print(gps.location.lng(), 6);
+    tft.println(F(" W"));
+  }
+  else
+  {
+    tft.print(F("INVALID"));
+  }
+
+  tft.println(F("Date/Time: "));
+  if (gps.date.isValid())
+  {
+    tft.print(gps.date.month());
+    tft.print(F("/"));
+    tft.print(gps.date.day());
+    tft.print(F("/"));
+    tft.print(gps.date.year());
+  }
+  else
+  {
+    tft.print(F("INVALID"));
+  }
+
+  tft.print(F(" "));  
+if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) tft.print(F("0"));
+    tft.print(gps.time.hour());
+    tft.print(F(":"));
+    if (gps.time.minute() < 10) tft.print(F("0"));
+   tft.print(gps.time.minute());
+   tft.print(F(":"));
+    if (gps.time.second() < 10) tft.print(F("0"));
+    tft.print(gps.time.second());
+    tft.print(F("."));
+    if (gps.time.centisecond() < 10) tft.print(F("0"));
+    tft.println(gps.time.centisecond());
+
+
+
+    tft.print("Temperature = ");
+  tft.print((bmp.temperature * 1.8) + 32);
+  tft.println(" *F");
+
+  tft.print("Pressure = ");
+  tft.print(bmp.pressure / 100.0);
+  tft.println(" hPa");
+
+  tft.print("Approx. Altitude = ");
+  tft.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
+  tft.println(" m");
+
+  tft.println();
+  }
+  else
+  {
+    tft.print(F("INVALID"));
+  }
+
+  Serial.println();
 }
-#endif //#ifdef__AVR__
-
-//int color = 0;
-
-uint32_t timer = millis();
 
 void loop()
 {
-    // in case you are not using the interrupt above, you'll
-  // need to 'hand query' the GPS, not suggested :(
-  if (! usingInterrupt) {
-    // read data from the GPS in the 'main loop'
-    char c = GPS.read();
-    // if you want to debug, this is a good time to do it!
-    if (GPSECHO)
-      if (c) Serial.print(c);
-  }
-  
-  // if a sentence is received, we can check the checksum, parse it...
-  if (GPS.newNMEAreceived()) {
-    // a tricky thing here is if we print the NMEA sentence, or data
-    // we end up not listening and catching other sentences! 
-    // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
-    //Serial.println(GPS.lastNMEA());   // this also sets the newNMEAreceived() flag to false
-  
-    if (!GPS.parse(GPS.lastNMEA()))   // this also sets the newNMEAreceived() flag to false
-      return;  // we can fail to parse a sentence in which case we should just wait for another
+
+// This sketch displays information every time a new sentence is correctly encoded.
+  while (ss.available() > 0)
+    if (gps.encode(ss.read()))
+      displayInfo();
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+    while(true);
   }
 
-  // if millis() or timer wraps around, we'll just reset it
-  if (timer > millis())  timer = millis();
+    motor1.setSpeed(200);
+    motor1.runSpeed();
 
-  // approximately every 2 seconds or so, print out the current stats
-  if (millis() - timer > 2000) { 
-    timer = millis(); // reset the timer
-    
-    Serial.print("\nTime: ");
-    Serial.print(GPS.hour, DEC); Serial.print(':');
-    Serial.print(GPS.minute, DEC); Serial.print(':');
-    Serial.print(GPS.seconds, DEC); Serial.print('.');
-    Serial.println(GPS.milliseconds);
-    Serial.print("Date: ");
-    Serial.print(GPS.day, DEC); Serial.print('/');
-    Serial.print(GPS.month, DEC); Serial.print("/20");
-    Serial.println(GPS.year, DEC);
-    Serial.print("Fix: "); Serial.print((int)GPS.fix);
-    Serial.print(" quality: "); Serial.println((int)GPS.fixquality); 
-    if (GPS.fix) {
-      Serial.print("Location: ");
-      Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
-      Serial.print(", "); 
-      Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
-      
-      Serial.print("Speed (knots): "); Serial.println(GPS.speed);
-      Serial.print("Angle: "); Serial.println(GPS.angle);
-      Serial.print("Altitude: "); Serial.println(GPS.altitude);
-      Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-    }
+    motor2.setSpeed(200);
+    motor2.runSpeed();
+
+    if (! bmp.performReading()) {
+    Serial.println("Failed to perform reading :(");
   }
-
-    // clear screen
-//    tft.setCursor(0, 12);
- //   tft.print("sad: ");
-//    tft.println((int)GPS.satellites);
-//    tft.print("year: ");
-//    tft.println(GPS.year, DEC);
-    //bmp.readTemperature();
-
-    //tft.print("bmp: ");
-    //tft.println(bmp.temperature);
-    
-//    motor1.setSpeed(200);
-//    motor1.runSpeed();
-
-//    motor2.setSpeed(200);
-//    motor2.runSpeed();
 }
