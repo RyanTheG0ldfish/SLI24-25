@@ -237,7 +237,7 @@ if (gps.time.isValid())
   Serial.println();
 }
 
-uint8_t data[] = "Hello World!";
+uint8_t data[] = "Success";
 // Dont put this on the stack:
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
 
@@ -350,4 +350,24 @@ Set the speed, in steps per second. This function returns immediately. Actual mo
 mystepper.runSpeed();
 Update the motor. This must be called repetitively to make the motor move.
 
+*/
+
+/* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
+1) Power on - GPS Signal Acquire
+2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
+ * in this time the code will allow the drone to start up and then it will shut off the drone so that the motors believe they are in idle mode.
+3) Wait for launch to complete - May lose communication halfway through flight as we exit our antennae range
+4) Landed - Regained Communication between controller (Wait for command to be received)
+5) Receive "Separate" command from handheld controller
+6) Power Stepper motors from Position X to Position Y
+7) Send "Success" Message to handheld controller for successful separation
+8) Enable UAV Power for startup
+9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
+7) Wait for command from handheld controller
+8) Receive "LAUNCH" command from handheld controller
+9) Move stepper motors from position X to position Y
+10) Send "Launch" Command to UAV with position data of the Rocket
+11) UAV takes off - This codes mission is ALMOST done.
+12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV. 
+13) STOP sending data after UAV has landed and "STOP" command is given.
 */
