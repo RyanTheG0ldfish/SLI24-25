@@ -1,121 +1,144 @@
 #include <Arduino.h>
 #include <adafruit_ST7789.h>
 #include <Adafruit_GFX.h>
-//#include <Adafruit_GPS.h>
 #include <Adafruit_BMP3XX.h>
 #include <AccelStepper.h>
 #include <TinyGPSPlus.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
 #include <SPI.h>
-//#include <Adafruit_Sensor.h>
 #include <RH_RF95.h>
 #include <RHReliableDatagram.h>
 
-static const int RXPin = 0, TXPin = 1;
+//GPS
 static const uint32_t GPSBaud = 9600;
-
 TinyGPSPlus gps;
-
+static const int RXPin = 0, TXPin = 1;
 SoftwareSerial ss(RXPin, TXPin);
 
+//Radio
 #define CLIENT_ADDRESS 1
 #define SERVER_ADDRESS 2
+RH_RF95 driver(3, 20); // Singleton instance of the radio driver
+RHReliableDatagram manager(driver, CLIENT_ADDRESS); // Class to manage message delivery and receipt, using the driver declared above
 
-// Singleton instance of the radio driver
-RH_RF95 driver(3, 20);
+//Display
+Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5); // Initialize Adafruit ST7789 TFT library
 
-// Class to manage message delivery and receipt, using the driver declared above
-RHReliableDatagram manager(driver, CLIENT_ADDRESS);
-
-// Initialize Adafruit ST7789 TFT library
-Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5);
+//BMP 3XX
 Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
 #define BMP_SCK 13
 #define BMP_MISO 12
 #define BMP_MOSI 11
 #define BMP_CS 4
-
 #define SEALEVELPRESSURE_HPA (1013.25)
 
+//Stepper Motors
 AccelStepper motor1(1, 8, 9);
 AccelStepper motor2(1, 14, 15);
 
+//Missing Servo Control
+
+
 void setup()
 {
-  Serial.begin(115200);
-    ss.begin(GPSBaud);
+//Serial
+Serial.begin(115200);
+  
+//GPS
+ss.begin(GPSBaud);
 
-Serial.println(F("DeviceExample.ino"));
-  Serial.println(F("A simple demonstration of TinyGPSPlus with an attached GPS module"));
-  Serial.print(F("Testing TinyGPSPlus library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
-  Serial.println(F("by Mikal Hart"));
-  Serial.println();
-
+//Radio
 if (!manager.init())
-    Serial.println("Radio init failed");
-  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-
-  // The default transmitter power is 13dBm, using PA_BOOST.
-  // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
-  // you can set transmitter powers from 2 to 20 dBm:
+Serial.println("Radio init failed");  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on...The default transmitter power is 13dBm, using PA_BOOST.
+// If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 2 to 20 dBm: 
 //  driver.setTxPower(20, false);
-  // If you are using Modtronix inAir4 or inAir9, or any other module which uses the
-  // transmitter RFO pins and not the PA_BOOST pins
-  // then you can configure the power transmitter power for 0 to 15 dBm and with useRFO true. 
-  // Failure to do that will result in extremely low transmit powers.
-//  driver.setTxPower(14, true);
-
-  // You can optionally require this module to wait until Channel Activity
-  // Detection shows no activity on the channel before transmitting by setting
-  // the CAD timeout to non-zero:
+// You can optionally require this module to wait until Channel Activity Detection shows no activity on the channel before transmitting by setting the CAD timeout to non-zero:
 //  driver.setCADTimeout(10000);
 
-//if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
-  if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
-  //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-    while (1);
-  }
+//BMP 3XX
+if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
+  Serial.println("Could not find a valid BMP3 sensor, check wiring!"); }
+bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X); // Set up oversampling and filter initialization
+bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
-  // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-
-    // set up screen
-   tft.init(172, 320);
-   tft.setRotation(3);
-
-   tft.setCursor(0, 12);
-   tft.setTextColor(0xffff, 0x0000);
+//Display
+tft.init(172, 320);
+tft.setRotation(3);
+tft.setCursor(0, 12);
+tft.setTextColor(0xffff, 0x0000);
 tft.setTextSize(2);
-   tft.setTextWrap(true);
+tft.setTextWrap(true);
+tft.fillRect(0, 0, 320, 172, 0x0000);
 
-   tft.fillRect(0, 0, 320, 172, 0x0000);
+//Stepper Motors
+motor1.setAcceleration(20);
+motor1.setMaxSpeed(400);
+motor2.setAcceleration(20);
+motor2.setMaxSpeed(400);
+pinMode(22, OUTPUT);
+digitalWrite(22, HIGH);
 
-   motor1.setAcceleration(20);
-   motor1.setMaxSpeed(400);
-    motor2.setAcceleration(20);
-    motor2.setMaxSpeed(400);
+//Missing Servo Stuff
 
-    pinMode(22, OUTPUT);
-    digitalWrite(22, HIGH);
+
 }
+
+void PowerOff()
+{
+/* 
+1) Power On - GPS Signal Acquire
+2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
+ * in this time the code will allow the drone to start up and then it will shut off the drone so that the motors believe they are in idle mode.
+*/
+}
+
+void Separate()
+{
+/*
+5) Receive "Separate" command from handheld controller
+6) Power Stepper motors from Position X to Position Y
+7) Send "Success" Message to handheld controller for successful separation
+8) Enable UAV Power for startup
+9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
+7) Wait for command from handheld controller
+*/
+}
+
+void Launch()
+{
+/*
+8) Receive "LAUNCH" command from handheld controller
+9) Move servo motors from position X to position Y
+10) Send "Launch" Command to UAV with position data of the Rocket
+11) UAV takes off
+*/
+}
+
+void Data()
+{
+/*
+12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV. 
+13) STOP sending data after UAV has landed and "STOP" command is given.
+*/
+}
+
+
+
+
+
 
 void displayInfo()
 {
+//GPS
   Serial.print(F("Location: ")); 
   if (gps.location.isValid())
   {
     Serial.print(gps.location.lat(), 6);
     Serial.print(F(","));
     Serial.print(gps.location.lng(), 6);
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
   }
 
   Serial.print(F("  Date/Time: "));
@@ -126,10 +149,6 @@ void displayInfo()
     Serial.print(gps.date.day());
     Serial.print(F("/"));
     Serial.print(gps.date.year());
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
   }
 
   Serial.print(F(" "));
@@ -146,31 +165,23 @@ void displayInfo()
     Serial.print(F("."));
     if (gps.time.centisecond() < 10) Serial.print(F("0"));
     Serial.print(gps.time.centisecond());
+  }
 
-    Serial.print("Temperature = ");
+  //BMP 3XX
+  Serial.print("Temperature = ");
   Serial.print((bmp.temperature * 1.8) + 32);
   Serial.println(" *F");
-
   Serial.print("Pressure = ");
   Serial.print(bmp.pressure / 100.0);
   Serial.println(" hPa");
-
   Serial.print("Approx. Altitude = ");
   Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
   Serial.println(" m");
-
   Serial.println();
-  }
-  else
-  {
-    Serial.print(F("INVALID"));
-  }
-
-
-
+ 
 
 // TFT STUFF
-    tft.setCursor(0, 12); //clear screen
+  tft.setCursor(0, 12); //clear screen
   tft.println(F("Location: ")); 
   if (gps.location.isValid())
   {
@@ -218,28 +229,22 @@ if (gps.time.isValid())
     tft.print("Temperature = ");
   tft.print((bmp.temperature * 1.8) + 32);
   tft.println(" *F");
-
   tft.print("Pressure = ");
   tft.print(bmp.pressure / 100.0);
   tft.println(" hPa");
-
   tft.print("Approx. Altitude = ");
   tft.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
   tft.println(" m");
-
   tft.println();
-  }
-  else
-  {
-    tft.print(F("INVALID"));
-  }
 
   Serial.println();
+}
 }
 
 uint8_t data[] = "Success";
 // Dont put this on the stack:
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+
 
 void loop()
 {
@@ -254,12 +259,14 @@ void loop()
     Serial.println(F("No GPS detected: check wiring."));
     while(true);
   }
-    motor1.setSpeed(200);
-    motor1.runSpeed();
 
-    motor2.setSpeed(200);
-    motor2.runSpeed();
+//Stepper Motors
+motor1.setSpeed(200);
+motor1.runSpeed();
+motor2.setSpeed(200);
+motor2.runSpeed();
 
+//BMP 3XX
     if (! bmp.performReading()) {
     Serial.println("Failed to perform reading :(");
   }
@@ -365,7 +372,7 @@ Update the motor. This must be called repetitively to make the motor move.
 9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
 7) Wait for command from handheld controller
 8) Receive "LAUNCH" command from handheld controller
-9) Move stepper motors from position X to position Y
+9) Move servo motors from position X to position Y
 10) Send "Launch" Command to UAV with position data of the Rocket
 11) UAV takes off - This codes mission is ALMOST done.
 12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV. 
