@@ -119,44 +119,49 @@ void setMotor(Servo motor, double percentOutput)
 
 }
 
-
-
-
-
-
 void setup() {
-Serial.begin(115200);
-ss.begin(GPSBaud);
+Serial.begin(115200); //serial for everything
 
-if (!dso32.begin_SPI(LSM_CS)) {
-     Serial.println("Failed to find LSM6DSO32 chip");
-    while (1) {
-      delay(10);
-    }
+ss.begin(GPSBaud); //Intiialize GPS
+
+if (! bmp.begin_SPI(BMP_CS)) {  // Initialize BMP3XX
+    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
   }
+  // Set up oversampling and filter initialization -- Initialize BMP3XX
+  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
-    dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE_4_G);
-    dso32.setGyroRange(LSM6DS_GYRO_RANGE_500_DPS);
-    dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
-    dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
+if (!dso32.begin_SPI(LSM_CS)) { //Initialize Gyro
+     Serial.println("Failed to find LSM6DSO32 chip");
+  }
+  // Set up Ranges for Gyro
+  dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE_4_G);
+  dso32.setGyroRange(LSM6DS_GYRO_RANGE_500_DPS);
+  dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
+  dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
 
-    escFL.attach(2);
-    escFR.attach(3);
-    escBL.attach(4);
-    escBR.attach(5);
+  //Custom Motor Control Stuff
+  escFL.attach(2);
+  escFR.attach(3);
+  escBL.attach(4);
+  escBR.attach(5);
 
-    escFL.writeMicroseconds(output);
-    escFR.writeMicroseconds(output);
-    escBL.writeMicroseconds(output);
-    escBR.writeMicroseconds(output);
+  //More Custom Motor Control Stuff
+  escFL.writeMicroseconds(output);
+  escFR.writeMicroseconds(output);
+  escBL.writeMicroseconds(output);
+  escBR.writeMicroseconds(output);
 
-    uint32_t time = millis();
+  //More of Ethan's Stuff
+  uint32_t time = millis();
+  lastTime = time;
+  armTime = time;
+  printTime = time;
 
-    lastTime = time;
-    armTime = time;
-    printTime = time;
 
-if (!manager.init())
+if (!manager.init())  //Initialize Radio
     Serial.println("Radio init failed");
   // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
 
@@ -175,32 +180,15 @@ if (!manager.init())
   // the CAD timeout to non-zero:
 //  driver.setCADTimeout(10000);
 
-//if (!bmp.begin_I2C()) {   // hardware I2C mode, can pass in address & alt Wire
-  if (! bmp.begin_SPI(BMP_CS)) {  // hardware SPI mode  
-  //if (! bmp.begin_SPI(BMP_CS, BMP_SCK, BMP_MISO, BMP_MOSI)) {  // software SPI mode
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-    while (1);
-  }
-  
-   // Set up oversampling and filter initialization
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-
-/* WHATS THIS FOR
-  pinMode(22, OUTPUT);          
-    digitalWrite(22, HIGH); 
-  */
 }
 
+//This is for the radio
 uint8_t data[] = "Success";
-// Dont put this on the stack:
+// Dont put this on the stack: (Also for Radio)
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
 
 void loop() {
-  // This sketch displays information every time a new sentence is correctly encoded.
-
+  // This currently displays information every time a new sentence is correctly encoded.
   if (millis() > 5000 && gps.charsProcessed() < 10)
   {
     Serial.println(F("No GPS detected: check wiring."));
@@ -226,8 +214,6 @@ if (manager.available())
     }
   }
   */
-
-
 
   /*      CLIENT SIDE RF95
   // Send a message to manager_server
