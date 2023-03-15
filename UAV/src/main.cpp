@@ -316,24 +316,18 @@ if (manager.available())
 
 }
 
-
-
-/* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
-1) Power on - GPS Signal Acquire
-2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
- * in this time the code will allow the drone to start up and then it will shut off the drone so that the motors believe they are in idle mode.
-3) Wait for launch to complete - May lose communication halfway through flight as we exit our antennae range
-4) Landed - Regained Communication between controller (Wait for command to be received)
-5) Receive "Separate" command from handheld controller
-6) Power Stepper motors from Position X to Position Y
-7) Send "Success" Message to handheld controller for successful separation
-8) Enable UAV Power for startup
-9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
-7) Wait for command from handheld controller
-8) Receive "LAUNCH" command from handheld controller
-9) Move stepper motors from position X to position Y
-10) Send "Launch" Command to UAV with position data of the Rocket
-11) UAV takes off - This codes mission is ALMOST done.
-12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV. 
-13) STOP sending data after UAV has landed and "STOP" command is given.
+/* ENVISIONED FLOW PATTERN OF THIS UAV CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
+1) Power on - Set motors to 0 - power off (getting powered off by other board)
+2) Power on once landed (done by other board
+3) Receive data communication from other board - either wired or wirelessly
+  - This is GPS, altitude, etc. data.
+4) Get command to launch from other board
+  - Launch once all systems are ready to go
+5) Level off @ 10 feet off the ground using garmin lidar
+6) Use GPS heading information to geolocate where to go to handheld controller
+7) Using GPS, subtract the two points to get a target location to fly to - and fly to it.
+8) Once uav reaches handheld controller - wait for handheld controller to give signal to go back.
+9) Target the location of the Deployment GPS, maintaining X distance away from the handheld controller
+10) Go to X feet to the right of the rocket and hover
+11) land once land command is given
 */
