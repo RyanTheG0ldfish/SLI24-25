@@ -7,6 +7,11 @@
 #include <SPI.h>
 #include <RH_RF95.h>
 #include <RHReliableDatagram.h>
+#include <Adafruit_LSM6DSO32.h>
+#include <servo.h>
+
+#define LSM_CS 9  // For SPI mode, we need a CS pin
+Adafruit_LSM6DSO32 dso32;
 
 #define CLIENT_ADDRESS 1
 #define SERVER_ADDRESS 2
@@ -27,9 +32,129 @@ RH_RF95 driver(3, 20); // CHECK IF CORRRECT
 
 RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 
+Servo escFL;
+Servo escFR;
+Servo escBL;
+Servo escBR;
+
+int output = 1488;
+
+uint32_t printTime = 0;
+uint32_t motorTime = 0;
+uint32_t armTime = 0;
+uint32_t lastTime = 0;
+
+double velocityX;
+double velocityY;
+double velocityZ;
+double gyroPitch;
+double gyroRoll;
+double gyroYaw;
+
+enum MotorMode
+{
+    Arm,
+    Operate,
+};
+
+MotorMode motorMode = Arm;
+
+
+double pidCalculate(double input, double setpoint, double p, double i, double d, double &prevError, double &errorSum)
+{
+    double error = setpoint - input;
+}
+
+
+void updateGyro()
+{
+
+}
+
+void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
+{
+        Serial.println();
+        Serial.print("Temp: ");
+        Serial.print((bmp.temperature * 1.8) + 32);
+        Serial.println(" F");
+        Serial.print("Pres.: ");
+        Serial.print(bmp.pressure / 100.0);
+        Serial.println(" hPa");
+        Serial.print("Alt: ");
+        Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084);
+        Serial.println(" ft");
+
+        Serial.print("Temperature ");
+        Serial.print((temp.temperature) * 1.8 + 32);
+        Serial.println(" F");
+
+        /* Display the results (acceleration is measured in m/s^2) */
+        Serial.print("Accel X: ");
+        Serial.print(accel.acceleration.x);
+        Serial.print("\tY: ");
+        Serial.print(accel.acceleration.y);
+        Serial.print("\tZ: ");
+        Serial.print(accel.acceleration.z);
+        Serial.println(" m/s^2");
+
+        /* Display the results (rotation is measured in rad/s) */
+        Serial.print("Gyro X: ");
+        Serial.print(gyro.gyro.x);
+        Serial.print("\tY: ");
+        Serial.print(gyro.gyro.y);
+        Serial.print("\tZ: ");
+        Serial.print(gyro.gyro.z);
+        Serial.println(" radians/s ");
+
+        Serial.print("Pitch: ");
+        Serial.print(gyroPitch);
+        Serial.print("\tRoll: ");
+        Serial.println(gyroRoll);
+
+        Serial.println(output);
+}
+
+void setMotor(Servo motor, double percentOutput)
+{
+
+}
+
+
+
+
+
+
 void setup() {
 Serial.begin(115200);
 ss.begin(GPSBaud);
+
+if (!dso32.begin_SPI(LSM_CS)) {
+     Serial.println("Failed to find LSM6DSO32 chip");
+    while (1) {
+      delay(10);
+    }
+  }
+
+    dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE_4_G);
+    dso32.setGyroRange(LSM6DS_GYRO_RANGE_500_DPS);
+    dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
+    dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
+
+    escFL.attach(2);
+    escFR.attach(3);
+    escBL.attach(4);
+    escBR.attach(5);
+
+    escFL.writeMicroseconds(output);
+    escFR.writeMicroseconds(output);
+    escBL.writeMicroseconds(output);
+    escBR.writeMicroseconds(output);
+
+    uint32_t time = millis();
+
+    lastTime = time;
+    armTime = time;
+    printTime = time;
 
 if (!manager.init())
     Serial.println("Radio init failed");
@@ -82,10 +207,6 @@ void loop() {
     while(true);
   }
 
-    if (! bmp.performReading()) {
-    Serial.println("Failed to perform reading :(");
-  }
-
   /* SERVER SIDE RF95
  Serial.println("Sending to rf95_reliable_datagram_server");
 if (manager.available())
@@ -131,6 +252,67 @@ if (manager.available())
     Serial.println("sendtoWait failed");
   delay(500);
   */
+
+ uint32_t time = micros();
+
+    if (Serial.available())
+    {
+        char serialInput = Serial.read();
+        if (strcmp(&serialInput, "s") == 0)
+        {
+            output = 1488;
+        }
+
+        if (strcmp(&serialInput, "a") == 0)
+        {
+            output -= 1;
+        }
+
+        if (strcmp(&serialInput, "d") == 0)
+        {
+            output += 1;
+        }
+    }
+    
+    if (!bmp.performReading())
+    {
+        Serial.println("Failed to perform altimeter reading");
+    }
+
+    //  /* Get a new normalized sensor event */
+    sensors_event_t accel;
+    sensors_event_t gyro;
+    sensors_event_t temp;
+    if (!dso32.getEvent(&accel, &gyro, &temp))
+    {
+        Serial.println("Failed to perform gyro reading");
+    }
+
+    gyroRoll=-atan(accel.acceleration.x/sqrt(accel.acceleration.y*accel.acceleration.y+accel.acceleration.z*accel.acceleration.z))*1/(3.142/180);
+    gyroPitch=atan(accel.acceleration.y/sqrt(accel.acceleration.x*accel.acceleration.x+accel.acceleration.z*accel.acceleration.z))*1/(3.142/180);
+
+    if (time - motorTime > 10000)
+    {
+        motorTime = time;
+
+        if (millis() - armTime > 10000)
+        {
+            motorMode = Operate;
+        }
+    }
+
+    escFL.writeMicroseconds(output);
+    escFR.writeMicroseconds(output);
+    escBL.writeMicroseconds(output);
+    escBR.writeMicroseconds(output);
+    
+    if (time - printTime > 1000000)
+    {
+        printTime = time;
+        printData(temp, accel, gyro);
+    }
+
+    lastTime = time;
 
 }
 
