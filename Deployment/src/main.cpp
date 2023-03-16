@@ -20,8 +20,8 @@ SoftwareSerial ss(RXPin, TXPin);
 // Radio
 #define CLIENT_ADDRESS 1
 #define SERVER_ADDRESS 2
-RH_RF95 driver(3, 20);                              // Singleton instance of the radio driver
-RHReliableDatagram manager(driver, CLIENT_ADDRESS); // Class to manage message delivery and receipt, using the driver declared above
+RH_RF95 rf95(3, 20);                              // Singleton instance of the radio driver
+//RHReliableDatagram manager(driver, CLIENT_ADDRESS); // Class to manage message delivery and receipt, using the driver declared above
 
 // Display
 Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5); // Initialize Adafruit ST7789 TFT library
@@ -53,7 +53,7 @@ void setup()
     ss.begin(GPSBaud);
 
     // Radio
-    if (!manager.init())
+    if (!rf95.init())
         Serial.println("Radio init failed"); // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on...The default transmitter power is 13dBm, using PA_BOOST.
     // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 2 to 20 dBm:
     //  driver.setTxPower(20, false);
@@ -241,10 +241,6 @@ void displayInfo()
     }
 }
 
-// something to do with what the radio sends
-uint8_t data[] = "Success";
-// Dont put this on the stack:
-uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
 
 void loop()
 {
@@ -260,7 +256,19 @@ void loop()
         Serial.println("Failed to perform reading :(");
     }
 
-    // recieve radio messages
+    if (rf95.available())
+    {
+        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+
+        if (rf95.recv(buf, &len))
+        {
+            Serial.println((char*)buf);
+            uint8_t data[] = "reply";
+            rf95.send(data, sizeof(data));
+        }
+    }
+    
 
     // if "separate" message detected
         // set separate to true
