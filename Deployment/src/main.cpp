@@ -266,6 +266,11 @@ void loop()
             Serial.println((char*)buf);
             uint8_t data[] = "reply";
             rf95.send(data, sizeof(data));
+
+            if ((char*)buf == "Separate")
+            {
+                separate = true;
+            }
         }
     }
     
