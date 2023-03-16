@@ -9,6 +9,7 @@
 #include <SPI.h>
 #include <RH_RF95.h>
 #include <RHReliableDatagram.h>
+#include <Servo.h>
 
 //GPS
 static const uint32_t GPSBaud = 9600;
@@ -37,8 +38,9 @@ Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
 AccelStepper motor1(1, 8, 9);
 AccelStepper motor2(1, 14, 15);
 
-//Missing Servo Control
-
+//Untested Servo Control
+Servo servo1;  // create servo object #1 to control servo 1
+Servo servo2; //create servo object #2 to control servo 2
 
 void setup()
 {
@@ -81,18 +83,10 @@ motor2.setMaxSpeed(400);
 pinMode(22, OUTPUT);
 digitalWrite(22, HIGH);
 
-//Missing Servo Stuff
+//Untested Servo Stuff
+//servo1.attach(9);  // attaches the servo on pin 9 to the servo object
+//servo2.attach(5); // attaches the servo on pin 9 to the servo object
 
-
-}
-
-void PowerOff()
-{
-/* 
-1) Power On - GPS Signal Acquire
-2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
- * in this time the code will allow the drone to start up and then it will shut off the drone so that the motors believe they are in idle mode.
-*/
 }
 
 void Separate()
@@ -100,9 +94,17 @@ void Separate()
 /*
 5) Receive "Separate" command from handheld controller
 6) Power Stepper motors from Position X to Position Y
+
+  //Stepper Motors
+  motor1.setSpeed(200);
+  motor1.runSpeed();
+  motor2.setSpeed(200);
+  motor2.runSpeed();
+
 7) Send "Success" Message to handheld controller for successful separation
-8) Enable UAV Power for startup
+
 9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
+
 7) Wait for command from handheld controller
 */
 }
@@ -111,22 +113,14 @@ void Launch()
 {
 /*
 8) Receive "LAUNCH" command from handheld controller
+
 9) Move servo motors from position X to position Y
+    servo1.write(180); //values are from 0 to 180
+    servo2.write(180); //values for position are from 0 to 180
 10) Send "Launch" Command to UAV with position data of the Rocket
-11) UAV takes off
+
 */
 }
-
-void Data()
-{
-/*
-12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV. 
-13) STOP sending data after UAV has landed and "STOP" command is given.
-*/
-}
-
-
-
 
 
 
@@ -180,7 +174,7 @@ void displayInfo()
   Serial.println();
  
 
-// TFT STUFF
+//DISPLAY
   tft.setCursor(0, 12); //clear screen
   tft.println(F("Location: ")); 
   if (gps.location.isValid())
@@ -238,13 +232,13 @@ if (gps.time.isValid())
   tft.println();
 
   Serial.println();
-}
+  } 
 }
 
+//something to do with what the radio sends 
 uint8_t data[] = "Success";
 // Dont put this on the stack:
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-
 
 void loop()
 {
@@ -260,11 +254,6 @@ void loop()
     while(true);
   }
 
-//Stepper Motors
-motor1.setSpeed(200);
-motor1.runSpeed();
-motor2.setSpeed(200);
-motor2.runSpeed();
 
 //BMP 3XX
     if (! bmp.performReading()) {
@@ -348,8 +337,6 @@ mystepper.runToPosition();
 Update the motor, and wait for it to reach its destination. This function does not return until the motor is stopped, so it is only useful if no other motors are moving.
 
 
-
-
 Speed Based Control
 mystepper.setSpeed(stepsPerSecond);
 Set the speed, in steps per second. This function returns immediately. Actual motion is caused by called runSpeed().
@@ -360,15 +347,12 @@ Update the motor. This must be called repetitively to make the motor move.
 */
 
 /* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
-1) Power on - GPS Signal Acquire
 2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
- * in this time the code will allow the drone to start up and then it will shut off the drone so that the motors believe they are in idle mode.
 3) Wait for launch to complete - May lose communication halfway through flight as we exit our antennae range
 4) Landed - Regained Communication between controller (Wait for command to be received)
 5) Receive "Separate" command from handheld controller
 6) Power Stepper motors from Position X to Position Y
 7) Send "Success" Message to handheld controller for successful separation
-8) Enable UAV Power for startup
 9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
 7) Wait for command from handheld controller
 8) Receive "LAUNCH" command from handheld controller
