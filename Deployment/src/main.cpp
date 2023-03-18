@@ -43,6 +43,9 @@ Servo servo1; // create servo object #1 to control servo 1
 Servo servo2; // create servo object #2 to control servo 2
 
 bool separate = false;
+bool part2 = false;
+bool position = false;
+float currentmillis = 0;
 
 void setup()
 {
@@ -92,8 +95,8 @@ void setup()
     // servo2.attach(5); // attaches the servo on pin 9 to the servo object
 }
 
-void Separate()
-{
+//void Separate()
+//{
     /*
     5) Receive "Separate" command from handheld controller
     6) Power Stepper motors from Position X to Position Y
@@ -110,20 +113,19 @@ void Separate()
 
     7) Wait for command from handheld controller
     */
-}
+//}
 
-void Launch()
-{
+//void Launch()
+//{
     /*
     8) Receive "LAUNCH" command from handheld controller
 
     9) Move servo motors from position X to position Y
-        servo1.write(180); //values are from 0 to 180
-        servo2.write(180); //values for position are from 0 to 180
+  
     10) Send "Launch" Command to UAV with position data of the Rocket
 
     */
-}
+//}
 
 void displayInfo()
 {
@@ -261,7 +263,7 @@ void loop()
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
 
-        if (rf95.recv(buf, &len))
+        if (rf95.recv(buf, &len)) // if "separate" message detected
         {
             Serial.println((char*)buf);
             uint8_t data[] = "reply";
@@ -269,76 +271,45 @@ void loop()
 
             if ((char*)buf == "Separate")
             {
-                separate = true;
+                separate = true;  // set separate to true
+                currentmillis = millis(); // set a counter to current time (0)
+                motor1.move(100); // set stepper target position
+                motor2.move(400); // set stepper target position                
+            }
+            
+            if ((char*)buf == "Position")
+            {
+                position = true;  // set position to true  
             }
         }
     }
     
-
-    // if "separate" message detected
-        // set separate to true
-        // set a counter to current time (0)
-        // set stepper target position
-    
-    // if separating
-        // check the time to the start (done?)
-        // check stepper position (done?)
-
-        // if done
-            // set servos
-            // send done message
-
-    // if "get position" message
-        // send current reading over radio (include gps position, altitude)
-
-    // run the stepper
-        
-
-    /* SERVER SIDE RF95
-     Serial.println("Sending to rf95_reliable_datagram_server");
-
-    if (manager.available())
-      {
-        // Wait for a message addressed to us from the client
-        uint8_t len = sizeof(buf);
-        uint8_t from;
-        if (manager.recvfromAck(buf, &len, &from))
+    if(separate == true) // if separating
+    {           
+        if((currentmillis - millis()) >= 5000) {}             // check the time to the start (done?)
+        if(motor1.distanceToGo && motor2.distanceToGo == 0)  // check stepper position (done?)
         {
-          Serial.print("got request from : 0x");
-          Serial.print(from, HEX);
-          Serial.print(": ");
-          Serial.println((char*)buf);
-
-          // Send a reply back to the originator client
-          if (!manager.sendtoWait(data, sizeof(data), from))
-            Serial.println("sendtoWait failed");
-        }
-      }
-      */
-
-    /*      CLIENT SIDE RF95
-    // Send a message to manager_server
-    if (manager.sendtoWait(data, sizeof(data), SERVER_ADDRESS))
-    {
-      // Now wait for a reply from the server
-      uint8_t len = sizeof(buf);
-      uint8_t from;
-      if (manager.recvfromAckTimeout(buf, &len, 2000, &from))
-      {
-        Serial.print("got reply from : 0x");
-        Serial.print(from, HEX);
-        Serial.print(": ");
-        Serial.println((char*)buf);
-      }
-      else
-      {
-        Serial.println("No reply, is rf95_reliable_datagram_server running?");
-      }
+          separate == false;
+          part2 == true;
+        }  
     }
-    else
-      Serial.println("sendtoWait failed");
-    delay(500);
-    */
+    
+    if(part2 == true) // if done
+    {
+        // set servos
+        servo1.write(180); //values are from 0 to 180
+        servo2.write(180);
+
+          // send done message
+    }
+
+    if(position == true);  // if "get position" message
+    {
+            // send current reading over radio (include gps position, altitude)
+    }
+
+        motor1.run(); //run the stepper
+        motor2.run(); //run the stepper
 }
 
 /* Stepper Motor Control Information
@@ -389,3 +360,49 @@ Update the motor. This must be called repetitively to make the motor move.
 12) Continue sending GPS coordinate and altitude data to UAV WHEN REQUESTED by the UAV.
 13) STOP sending data after UAV has landed and "STOP" command is given.
 */
+
+/* SERVER SIDE RF95
+     Serial.println("Sending to rf95_reliable_datagram_server");
+
+    if (manager.available())
+      {
+        // Wait for a message addressed to us from the client
+        uint8_t len = sizeof(buf);
+        uint8_t from;
+        if (manager.recvfromAck(buf, &len, &from))
+        {
+          Serial.print("got request from : 0x");
+          Serial.print(from, HEX);
+          Serial.print(": ");
+          Serial.println((char*)buf);
+
+          // Send a reply back to the originator client
+          if (!manager.sendtoWait(data, sizeof(data), from))
+            Serial.println("sendtoWait failed");
+        }
+      }
+      */
+
+    /*      CLIENT SIDE RF95
+    // Send a message to manager_server
+    if (manager.sendtoWait(data, sizeof(data), SERVER_ADDRESS))
+    {
+      // Now wait for a reply from the server
+      uint8_t len = sizeof(buf);
+      uint8_t from;
+      if (manager.recvfromAckTimeout(buf, &len, 2000, &from))
+      {
+        Serial.print("got reply from : 0x");
+        Serial.print(from, HEX);
+        Serial.print(": ");
+        Serial.println((char*)buf);
+      }
+      else
+      {
+        Serial.println("No reply, is rf95_reliable_datagram_server running?");
+      }
+    }
+    else
+      Serial.println("sendtoWait failed");
+    delay(500);
+    */
