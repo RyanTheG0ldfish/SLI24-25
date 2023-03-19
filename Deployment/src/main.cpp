@@ -12,40 +12,39 @@
 #include <Servo.h>
 
 // GPS
-static const uint32_t GPSBaud = 9600;
-TinyGPSPlus gps;
-static const int RXPin = 0, TXPin = 1;
-SoftwareSerial ss(RXPin, TXPin);
+static const uint32_t GPSBaud = 9600;   //GPS Baud rate
+TinyGPSPlus gps;   //GPS Driver
+static const int RXPin = 0, TXPin = 1;  //This defines the pins that are being used for RX and TX (UART)
+SoftwareSerial ss(RXPin, TXPin);    //Shouldn't need to be using Software Serial - am on hardwhere serial pins.
 
 // Radio
 #define CLIENT_ADDRESS 1
 #define SERVER_ADDRESS 2
-RH_RF95 rf95(3, 20);                              // Singleton instance of the radio driver
-//RHReliableDatagram manager(driver, CLIENT_ADDRESS); // Class to manage message delivery and receipt, using the driver declared above
+RH_RF95 rf95(3, 20);        // Singleton instance of the radio driver
 
 // Display
 Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5); // Initialize Adafruit ST7789 TFT library
 
 // BMP 3XX
-Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_MOSI 11
-#define BMP_CS 4
-#define SEALEVELPRESSURE_HPA (1013.25)
+Adafruit_BMP3XX bmp = Adafruit_BMP3XX(); //Initializes the driver
+#define BMP_SCK 13      //Clock Pin
+#define BMP_MISO 12     //MISO (Motherboard In - Signal Out)
+#define BMP_MOSI 11     //MOSI (Motherboard Out - Signal In)
+#define BMP_CS 4        //Chip Select Pin
+#define SEALEVELPRESSURE_HPA (1013.25)  //Sea Level Pressure
 
 // Stepper Motors
-AccelStepper motor1(1, 8, 9);
-AccelStepper motor2(1, 14, 15);
+AccelStepper motor1(1, 8, 9);         //Defining related pins for the motor driver
+AccelStepper motor2(1, 14, 15);       //Defining related pins for the motor driver
 
 // Untested Servo Control
 Servo servo1; // create servo object #1 to control servo 1
 Servo servo2; // create servo object #2 to control servo 2
 
-bool separate = false;
-bool part2 = false;
-bool position = false;
-float currentmillis = 0;
+bool separate = false; //Variable used to run different functions when a command is given
+bool part2 = false; //Variable used to run different functions when a command is given
+bool position = false;  //Variable used to run different functions when a command is given
+float currentmillis = 0;    //Variable used to run different functions when a command is given
 
 void setup()
 {
@@ -64,8 +63,8 @@ void setup()
     //  driver.setCADTimeout(10000);
 
     // BMP 3XX
-    if (!bmp.begin_SPI(BMP_CS))
-    { // hardware SPI mode
+    if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
+    { 
         Serial.println("Could not find a valid BMP3 sensor, check wiring!");
     }
     bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X); // Set up oversampling and filter initialization
@@ -87,45 +86,13 @@ void setup()
     motor1.setMaxSpeed(400);
     motor2.setAcceleration(20);
     motor2.setMaxSpeed(400);
-    pinMode(22, OUTPUT);
+    pinMode(22, OUTPUT); //Setting the step pin to high to initialize full step control
     digitalWrite(22, HIGH);
 
     // Untested Servo Stuff
-    // servo1.attach(9);  // attaches the servo on pin 9 to the servo object
-    // servo2.attach(5); // attaches the servo on pin 9 to the servo object
+    servo1.attach(9);  // attaches the servo on pin 9 to the servo object
+    servo2.attach(5); // attaches the servo on pin 9 to the servo object
 }
-
-//void Separate()
-//{
-    /*
-    5) Receive "Separate" command from handheld controller
-    6) Power Stepper motors from Position X to Position Y
-
-      //Stepper Motors
-      motor1.setSpeed(200);
-      motor1.runSpeed();
-      motor2.setSpeed(200);
-      motor2.runSpeed();
-
-    7) Send "Success" Message to handheld controller for successful separation
-
-    9) Send "Success" Message for correct UAV Startup communication (radio established and GPS communication established)
-
-    7) Wait for command from handheld controller
-    */
-//}
-
-//void Launch()
-//{
-    /*
-    8) Receive "LAUNCH" command from handheld controller
-
-    9) Move servo motors from position X to position Y
-  
-    10) Send "Launch" Command to UAV with position data of the Rocket
-
-    */
-//}
 
 void displayInfo()
 {
@@ -246,10 +213,8 @@ void displayInfo()
 
 void loop()
 {
-
-    // This sketch displays information every time a new sentence is correctly encoded.
-    while (ss.available() > 0)
-        if (gps.encode(ss.read()))
+    while (ss.available() > 0) // This sketch displays information every time a new sentence is correctly encoded.
+        if (gps.encode(ss.read()))  //If GPS encode - Then run the displayinfo command
             displayInfo();
 
     // BMP 3XX
@@ -274,42 +239,45 @@ void loop()
                 separate = true;  // set separate to true
                 currentmillis = millis(); // set a counter to current time (0)
                 motor1.move(100); // set stepper target position
-                motor2.move(400); // set stepper target position                
+                motor2.move(400); // set stepper target position  
             }
-            
+
             if ((char*)buf == "Position")
             {
-                position = true;  // set position to true  
+                position = true;  // set position to true (The Drone wants your position)
             }
         }
     }
     
     if(separate == true) // if separating
-    {           
-        if((currentmillis - millis()) >= 5000) {}             // check the time to the start (done?)
-        if(motor1.distanceToGo && motor2.distanceToGo == 0)  // check stepper position (done?)
-        {
-          separate == false;
-          part2 == true;
-        }  
+    {             
+        if((motor1.distanceToGo() == 0 && motor2.distanceToGo() == 0) && ((millis()-currentmillis) >= 5000))  // Checks if Stepper Motors & Time are at their respective endpoints
+            {
+             separate == false; //Stops this function from running
+             part2 == true;     //Makes a different function start running    
+             motor1.run(); //run the stepper
+             motor2.run(); //run the stepper
+            }  
     }
     
     if(part2 == true) // if done
     {
-        // set servos
-        servo1.write(180); //values are from 0 to 180
-        servo2.write(180);
-
-          // send done message
+        servo1.write(180); // Set Servos - Values are from 0 to 180
+        servo2.write(180);  //Set Servos - Values are from 0 to 180
+        uint8_t data[] = "Separated"; // Preapre Done Message
+        rf95.send(data, sizeof(data));  //Send Done Message
     }
 
     if(position == true);  // if "get position" message
     {
-            // send current reading over radio (include gps position, altitude)
+        uint8_t data[] = "Ready"; 
+       // tft.print(F(" N , "));
+       // tft.print(gps.location.lng(), 6);
+       // tft.println(F(" W"));;                          // send done message
+       // rf95.send(gps.location.lat(), sizeof(gps.location.lat()));
+       // rf95.send(gps.location.lng(), sizeof(gps.location.lng()));
+      //  rf95.send(data, sizeof(data));           // send current reading over radio (include gps position, altitude)
     }
-
-        motor1.run(); //run the stepper
-        motor2.run(); //run the stepper
 }
 
 /* Stepper Motor Control Information
