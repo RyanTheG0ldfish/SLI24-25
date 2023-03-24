@@ -82,9 +82,9 @@ void setup()
     tft.fillRect(0, 0, 320, 172, 0x0000);
 
     // Stepper Motors
-    motor1.setAcceleration(20);
+    motor1.setAcceleration(90);
     motor1.setMaxSpeed(400);
-    motor2.setAcceleration(20);
+    motor2.setAcceleration(90);
     motor2.setMaxSpeed(400);
     pinMode(22, OUTPUT); //Setting the step pin to high to initialize full step control
     digitalWrite(22, HIGH);
@@ -92,7 +92,11 @@ void setup()
     // Untested Servo Stuff
     servo1.attach(9);  // attaches the servo on pin 9 to the servo object
     servo2.attach(5); // attaches the servo on pin 9 to the servo object
+                     motor1.move(4000000); // set stepper target position
+               motor2.move(400000); // set stepper target position  
+
 }
+
 
 void displayInfo()
 {
@@ -208,6 +212,7 @@ void displayInfo()
 
         Serial.println();
     }
+  
 }
 
 
@@ -215,7 +220,7 @@ void loop()
 {
     while (ss.available() > 0) // This sketch displays information every time a new sentence is correctly encoded.
         if (gps.encode(ss.read()))  //If GPS encode - Then run the displayinfo command
-            displayInfo();
+          //  displayInfo();
 
     // BMP 3XX
     if (!bmp.performReading())
@@ -238,8 +243,7 @@ void loop()
             {
                 separate = true;  // set separate to true
                 currentmillis = millis(); // set a counter to current time (0)
-                motor1.move(100); // set stepper target position
-                motor2.move(400); // set stepper target position  
+
             }
 
             if ((char*)buf == "Position")
@@ -255,8 +259,7 @@ void loop()
             {
              separate == false; //Stops this function from running
              part2 == true;     //Makes a different function start running    
-             motor1.run(); //run the stepper
-             motor2.run(); //run the stepper
+             
             }  
     }
     
@@ -270,15 +273,30 @@ void loop()
 
     if(position == true);  // if "get position" message
     {
-        uint8_t data[] = "Ready"; 
+        uint8_t data[24];
+
+       String lat = String(gps.location.lat(), 8);
+
+        for (int i = 0; i < lat.length(); i++)
+        {
+            data[i] = lat.charAt(i);
+        }
+
+       rf95.send(data, lat.length());
+       // rf95.send(gps.location.lng(), sizeof(gps.location.lng()));
+      //  rf95.send(data, sizeof(data));           // send current reading over radio (include gps position, altitude)
+    }
+
+    motor1.run(); //run the stepper
+  motor2.run(); //run the stepper
+}
+
+
+
        // tft.print(F(" N , "));
        // tft.print(gps.location.lng(), 6);
        // tft.println(F(" W"));;                          // send done message
        // rf95.send(gps.location.lat(), sizeof(gps.location.lat()));
-       // rf95.send(gps.location.lng(), sizeof(gps.location.lng()));
-      //  rf95.send(data, sizeof(data));           // send current reading over radio (include gps position, altitude)
-    }
-}
 
 /* Stepper Motor Control Information
 
