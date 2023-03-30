@@ -1,6 +1,4 @@
 #include <Arduino.h>
-#include <adafruit_ST7789.h>
-#include <Adafruit_GFX.h>
 #include <Adafruit_BMP3XX.h>
 #include <AccelStepper.h>
 #include <TinyGPSPlus.h>
@@ -20,10 +18,7 @@ SoftwareSerial ss(RXPin, TXPin);    //Shouldn't need to be using Software Serial
 // Radio
 #define CLIENT_ADDRESS 1
 #define SERVER_ADDRESS 2
-RH_RF95 rf95(3, 20);        // Singleton instance of the radio driver
-
-// Display
-Adafruit_ST7789 tft = Adafruit_ST7789(10, 6, 5); // Initialize Adafruit ST7789 TFT library
+RH_RF95 rf95(3, 2);        // Singleton instance of the radio driver
 
 // BMP 3XX
 Adafruit_BMP3XX bmp = Adafruit_BMP3XX(); //Initializes the driver
@@ -34,17 +29,17 @@ Adafruit_BMP3XX bmp = Adafruit_BMP3XX(); //Initializes the driver
 #define SEALEVELPRESSURE_HPA (1013.25)  //Sea Level Pressure
 
 // Stepper Motors
-AccelStepper motor1(1, 8, 9);         //Defining related pins for the motor driver
+AccelStepper motor1(1, 8, 9);         //(1, 8, 9) where 1 = driver board, 8 = pinStep, and 9 = pinDirection
 AccelStepper motor2(1, 14, 15);       //Defining related pins for the motor driver
 
 // Untested Servo Control
 Servo servo1; // create servo object #1 to control servo 1
 Servo servo2; // create servo object #2 to control servo 2
 
+float currentmillis = 0;    //Variable used to run different functions when a command is given
 bool separate = false; //Variable used to run different functions when a command is given
 bool part2 = false; //Variable used to run different functions when a command is given
 bool position = false;  //Variable used to run different functions when a command is given
-float currentmillis = 0;    //Variable used to run different functions when a command is given
 
 void setup()
 {
@@ -72,161 +67,31 @@ void setup()
     bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
-    // Display
-    tft.init(172, 320);
-    tft.setRotation(3);
-    tft.setCursor(0, 12);
-    tft.setTextColor(0xffff, 0x0000);
-    tft.setTextSize(2);
-    tft.setTextWrap(true);
-    tft.fillRect(0, 0, 320, 172, 0x0000);
-
     // Stepper Motors
-    motor1.setAcceleration(90);
-    motor1.setMaxSpeed(400);
-    motor2.setAcceleration(90);
-    motor2.setMaxSpeed(400);
-    pinMode(22, OUTPUT); //Setting the step pin to high to initialize full step control
-    digitalWrite(22, HIGH);
+  motor1.setMaxSpeed(3000);
+  motor1.setAcceleration(100);
+  motor2.setMaxSpeed(3000);
+  motor2.setAcceleration(100);
 
-    // Untested Servo Stuff
-    servo1.attach(9);  // attaches the servo on pin 9 to the servo object
-    servo2.attach(5); // attaches the servo on pin 9 to the servo object
-                     motor1.move(4000000); // set stepper target position
-               motor2.move(400000); // set stepper target position  
+  pinMode(6, OUTPUT); //M0 - Setting the step pin to high to initialize full step control
+  digitalWrite(6, LOW);
+  pinMode(7, OUTPUT); //M1 - Setting the step pin to high to initialize full step control
+  digitalWrite(7, LOW);
 
-}
-
-
-void displayInfo()
-{
-    // GPS
-    Serial.print(F("Location: "));
-    if (gps.location.isValid())
-    {
-        Serial.print(gps.location.lat(), 6);
-        Serial.print(F(","));
-        Serial.print(gps.location.lng(), 6);
-    }
-
-    Serial.print(F("  Date/Time: "));
-    if (gps.date.isValid())
-    {
-        Serial.print(gps.date.month());
-        Serial.print(F("/"));
-        Serial.print(gps.date.day());
-        Serial.print(F("/"));
-        Serial.print(gps.date.year());
-    }
-
-    Serial.print(F(" "));
-    if (gps.time.isValid())
-    {
-        if (gps.time.hour() < 10)
-            Serial.print(F("0"));
-        Serial.print(gps.time.hour());
-        Serial.print(F(":"));
-        if (gps.time.minute() < 10)
-            Serial.print(F("0"));
-        Serial.print(gps.time.minute());
-        Serial.print(F(":"));
-        if (gps.time.second() < 10)
-            Serial.print(F("0"));
-        Serial.print(gps.time.second());
-        Serial.print(F("."));
-        if (gps.time.centisecond() < 10)
-            Serial.print(F("0"));
-        Serial.print(gps.time.centisecond());
-    }
-
-    // BMP 3XX
-    Serial.print("Temperature = ");
-    Serial.print((bmp.temperature * 1.8) + 32);
-    Serial.println(" *F");
-    Serial.print("Pressure = ");
-    Serial.print(bmp.pressure / 100.0);
-    Serial.println(" hPa");
-    Serial.print("Approx. Altitude = ");
-    Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-    Serial.println(" m");
-    Serial.println();
-
-    // DISPLAY
-    tft.setCursor(0, 12); // clear screen
-    tft.println(F("Location: "));
-    if (gps.location.isValid())
-    {
-        tft.print(gps.location.lat(), 6);
-        tft.print(F(" N , "));
-        tft.print(gps.location.lng(), 6);
-        tft.println(F(" W"));
-    }
-    else
-    {
-        tft.print(F("INVALID"));
-    }
-
-    tft.println(F("Date/Time: "));
-    if (gps.date.isValid())
-    {
-        tft.print(gps.date.month());
-        tft.print(F("/"));
-        tft.print(gps.date.day());
-        tft.print(F("/"));
-        tft.print(gps.date.year());
-    }
-    else
-    {
-        tft.print(F("INVALID"));
-    }
-
-    tft.print(F(" "));
-    if (gps.time.isValid())
-    {
-        if (gps.time.hour() < 10)
-            tft.print(F("0"));
-        tft.print(gps.time.hour());
-        tft.print(F(":"));
-        if (gps.time.minute() < 10)
-            tft.print(F("0"));
-        tft.print(gps.time.minute());
-        tft.print(F(":"));
-        if (gps.time.second() < 10)
-            tft.print(F("0"));
-        tft.print(gps.time.second());
-        tft.print(F("."));
-        if (gps.time.centisecond() < 10)
-            tft.print(F("0"));
-        tft.println(gps.time.centisecond());
-
-        tft.print("Temperature = ");
-        tft.print((bmp.temperature * 1.8) + 32);
-        tft.println(" *F");
-        tft.print("Pressure = ");
-        tft.print(bmp.pressure / 100.0);
-        tft.println(" hPa");
-        tft.print("Approx. Altitude = ");
-        tft.print(bmp.readAltitude(SEALEVELPRESSURE_HPA));
-        tft.println(" m");
-        tft.println();
-
-        Serial.println();
-    }
-  
+  //Servo Stuff
+  servo1.attach(18);   // attaches the servo on pin 9 to the servo object
+  servo2.attach(19);   // attaches the servo on pin 9 to the servo object
+  servo1.write(180); // Set Servos - Values are from 0 to 180
+  servo2.write(180); // Set Servos - Values are from 0 to 180
 }
 
 
 void loop()
 {
-    while (ss.available() > 0) // This sketch displays information every time a new sentence is correctly encoded.
-        if (gps.encode(ss.read()))  //If GPS encode - Then run the displayinfo command
-          //  displayInfo();
-
-    // BMP 3XX
-    if (!bmp.performReading())
-    {
-        Serial.println("Failed to perform reading :(");
-    }
+    while (ss.available() > 0) { //GPS
+      gps.encode(ss.read());  }
+    
+    bmp.performReading(); //Altimeter
 
     if (rf95.available())
     {
@@ -236,14 +101,15 @@ void loop()
         if (rf95.recv(buf, &len)) // if "separate" message detected
         {
             Serial.println((char*)buf);
-            uint8_t data[] = "reply";
+            uint8_t data[] = "Received"; //sending a reply
             rf95.send(data, sizeof(data));
 
             if ((char*)buf == "Separate")
             {
                 separate = true;  // set separate to true
                 currentmillis = millis(); // set a counter to current time (0)
-
+                motor1.moveTo(1000);
+                motor2.moveTo(2000);
             }
 
             if ((char*)buf == "Position")
@@ -252,83 +118,51 @@ void loop()
             }
         }
     }
-    
+   
     if(separate == true) // if separating
     {             
-        if((motor1.distanceToGo() == 0 && motor2.distanceToGo() == 0) && ((millis()-currentmillis) >= 5000))  // Checks if Stepper Motors & Time are at their respective endpoints
+        if((motor1.distanceToGo() == 0 && motor2.distanceToGo() == 0) && ((millis()-currentmillis) >= 10000))  // Checks if Stepper Motors & Time are at their respective endpoints
             {
+             
              separate == false; //Stops this function from running
              part2 == true;     //Makes a different function start running    
-             
             }  
     }
-    
-    if(part2 == true) // if done
+
+    if(part2 == true) // if separation is done
     {
-        servo1.write(180); // Set Servos - Values are from 0 to 180
-        servo2.write(180);  //Set Servos - Values are from 0 to 180
-        uint8_t data[] = "Separated"; // Preapre Done Message
+        servo1.write(0); // Set Servos - Values are from 0 to 180
+        servo2.write(0);  //Set Servos - Values are from 0 to 180
+        uint8_t data[] = "Separated"; // Prepare Done Message
         rf95.send(data, sizeof(data));  //Send Done Message
+        part2 == false; //stops this command from running again
     }
 
-    if(position == true);  // if "get position" message
+    if(position == true)  // if "get position" message is received
     {
-        uint8_t data[24];
-
+      Serial.println("Postrue");
+      uint8_t data[24];
        String lat = String(gps.location.lat(), 8);
 
         for (int i = 0; i < lat.length(); i++)
         {
             data[i] = lat.charAt(i);
         }
+        rf95.send(data, lat.length());
+        
+        delay(500);
 
-       rf95.send(data, lat.length());
-       // rf95.send(gps.location.lng(), sizeof(gps.location.lng()));
-      //  rf95.send(data, sizeof(data));           // send current reading over radio (include gps position, altitude)
+        String lng = String(gps.location.lng(), 8);
+        for (int i = 0; i < lng.length(); i++)
+        {
+            data[i] = lng.charAt(i);
+        }
+        rf95.send(data, lng.length());
     }
-
-    motor1.run(); //run the stepper
+  
+  motor1.run(); //run the stepper
   motor2.run(); //run the stepper
 }
-
-
-
-       // tft.print(F(" N , "));
-       // tft.print(gps.location.lng(), 6);
-       // tft.println(F(" W"));;                          // send done message
-       // rf95.send(gps.location.lat(), sizeof(gps.location.lat()));
-
-/* Stepper Motor Control Information
-
-
-Position Based Control
-mystepper.moveTo(targetPosition);
-Move the motor to a new absolute position. This returns immediately. Actual movement is caused by the run() function.
-
-mystepper.move(distance);
-Move the motor (either positive or negative) relative to its current position. This returns immediately. Actual movement is caused by the run() function.
-
-mystepper.currentPosition();
-Read the motor's current absolution position.
-
-mystepper.distanceToGo();
-Read the distance the motor is from its destination position. This can be used to check if the motor has reached its final position.
-
-mystepper.run();
-Update the motor. This must be called repetitively to make the motor move.
-
-mystepper.runToPosition();
-Update the motor, and wait for it to reach its destination. This function does not return until the motor is stopped, so it is only useful if no other motors are moving.
-
-
-Speed Based Control
-mystepper.setSpeed(stepsPerSecond);
-Set the speed, in steps per second. This function returns immediately. Actual motion is caused by called runSpeed().
-
-mystepper.runSpeed();
-Update the motor. This must be called repetitively to make the motor move.
-
-*/
 
 /* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
 2) Establish radio communication on the ground with handheld controller - Handheld controller receives the green light
