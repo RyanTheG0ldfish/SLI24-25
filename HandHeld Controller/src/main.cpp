@@ -5,6 +5,8 @@
 RH_RF95 rf95(10, 8); // Singleton instance of the radio driver
 TinyGPSPlus gps;
 
+bool position = false;
+
 void setup() 
 {
   Serial.begin(9600);
@@ -26,6 +28,7 @@ void loop()
   gps.encode(Serial1.read());
   } 
 
+{
  if (strcmp(&serialInput, "k") == 0)
      {
   uint8_t data[] = "k";
@@ -34,14 +37,6 @@ void loop()
   Serial.println("Sending to rf95_server");
      }
 
- if (strcmp(&serialInput, "w") == 0)
-     {
-  uint8_t data[] = "w";
-  rf95.send(data, sizeof(data));
-  rf95.waitPacketSent();
-  Serial.println("Sending to rf95_server");
-     }
-  
  if (strcmp(&serialInput, "s") == 0)
      {
   uint8_t data[] = "separate";
@@ -50,27 +45,75 @@ void loop()
   Serial.println("Sending to rf95_server");
      }
 
- if (strcmp(&serialInput, "p") == 0)
+ if (strcmp(&serialInput, "l") == 0)
      {
-  uint8_t data[] = "position";
+  uint8_t data[] = "launch";
   rf95.send(data, sizeof(data));
   rf95.waitPacketSent();
   Serial.println("Sending to rf95_server");
      }
-
+/*
  if (strcmp(&serialInput, "g") == 0)
      {
   uint8_t data[] = "g";
   rf95.send(data, sizeof(data));
   rf95.waitPacketSent();
   Serial.println("Sending to rf95_server");
+    }
+    */
+   /*
+ if (strcmp(&serialInput, "w") == 0)
+     {
+  uint8_t data[] = "w";
+  rf95.send(data, sizeof(data));
+  rf95.waitPacketSent();
+  Serial.println("Sending to rf95_server");
      }
+  */
+ }
 
-// If i receive "get position"
-//Send gps.location.lat & gps.location.lng & Altitude from bmp3xx
-//Serial.println(gps.location.lat(), 8);
-//Serial.println(gps.location.lng(), 8);
+if(rf95.available())
+    {
+        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+
+        if (rf95.recv(buf, &len)) // if "separate" message detected
+        {
+            if (strcmp((char*)buf, "handpos") == 0)
+            {
+            position = true;  // set separate to true
+            }          
+            Serial.println((char*)buf);
+        }
+    }
+
+if(position == true)
+{
+uint8_t data[24];
+       String lat = String(gps.location.lat(), 8);
+
+        for (int i = 0; i < lat.length(); i++)
+        {
+            data[i] = lat.charAt(i);
+        }
+        rf95.send(data, lat.length());
+        
+        delay(5);
+
+        String lng = String(gps.location.lng(), 8);
+        for (int i = 0; i < lng.length(); i++)
+        {
+            data[i] = lng.charAt(i);
+        }
+        rf95.send(data, lng.length());
     
-delay(400);
+        delay(5);
+
+        //Send  Altitude from bmp3xx - still missing
+    
+    }
+
 Serial.println(serialInput);
+
+delay(400);
 }
