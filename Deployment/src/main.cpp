@@ -81,7 +81,7 @@ void setup()
   //Servo Stuff
   servo1.attach(18);   // attaches the servo on pin 9 to the servo object
   servo2.attach(19);   // attaches the servo on pin 9 to the servo object
-  servo1.write(0); // Set Servos - Values are from 0 to 180
+  servo1.write(180); // Set Servos - Values are from 0 to 180
   servo2.write(0); // Set Servos - Values are from 0 to 180
 }
 
@@ -92,33 +92,29 @@ void loop()
       gps.encode(ss.read());  }
     
     bmp.performReading(); //Altimeter
-/*
-    if (rf95.available())
+
+ if (rf95.available())
     {
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
 
         if (rf95.recv(buf, &len)) // if "separate" message detected
         {
+            if (strcmp((char*)buf, "separate") == 0)
+            {
+            motor1.moveTo(1000);
+            motor2.moveTo(2000);
+            separate = true;  // set separate to true
+            currentmillis = millis(); // set a counter to current time (0)
+            }          
+            if (strcmp((char*)buf, "rocketpos") == 0)
+            {
+            position = true;  // set position to true (The Drone wants your position)
+            }          
             Serial.println((char*)buf);
-            uint8_t data[] = "Received"; //sending a reply
-            rf95.send(data, sizeof(data));
-
-            if ((char*)buf == "Separate")
-            {
-                separate = true;  // set separate to true
-                currentmillis = millis(); // set a counter to current time (0)
-                motor1.moveTo(1000);
-                motor2.moveTo(2000);
-            }
-
-            if ((char*)buf == "Position")
-            {
-                position = true;  // set position to true (The Drone wants your position)
-            }
         }
     }
-   
+
     if(separate == true) // if separating
     {             
         if((motor1.distanceToGo() == 0 && motor2.distanceToGo() == 0) && ((millis()-currentmillis) >= 10000))  // Checks if Stepper Motors & Time are at their respective endpoints
@@ -131,10 +127,8 @@ void loop()
 
     if(part2 == true) // if separation is done
     {
-      //  servo1.write(0); // Set Servos - Values are from 0 to 180
-        //servo2.write(0);  //Set Servos - Values are from 0 to 180
-      //  uint8_t data[] = "Separated"; // Prepare Done Message
-      //  rf95.send(data, sizeof(data));  //Send Done Message
+        servo1.write(0); // Set Servos - Values are from 0 to 180
+        servo2.write(180);  //Set Servos - Values are from 0 to 180
         part2 == false; //stops this command from running again
     }
 
@@ -150,7 +144,7 @@ void loop()
         }
         rf95.send(data, lat.length());
         
-        delay(500);
+        delay(5);
 
         String lng = String(gps.location.lng(), 8);
         for (int i = 0; i < lng.length(); i++)
@@ -159,49 +153,9 @@ void loop()
         }
         rf95.send(data, lng.length());
     }
-  */
+  
   motor1.run(); //run the stepper
   motor2.run(); //run the stepper
-
-
-
-  if (rf95.available())
-    {
-        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-        uint8_t len = sizeof(buf);
-
-        if (rf95.recv(buf, &len)) // if "separate" message detected
-        {
-            if (strcmp((char*)buf, "k") == 0)
-            {
-            servo1.write(0); // Set Servos - Values are from 0 to 180
-           servo2.write(180);
-           Serial.println("TURNINGk");
-            }
-            if (strcmp((char*)buf, "w") == 0)
-            {
-            motor1.moveTo(1000);
-            motor2.moveTo(2000);
-            }
-            if (strcmp((char*)buf, "s") == 0)
-            {
-            motor1.moveTo(-1000);
-            motor2.moveTo(-2000);
-            }           
-            if (strcmp((char*)buf, "p") == 0)
-            {
-            motor1.moveTo(0);
-            motor2.moveTo(0);
-            }
-            if (strcmp((char*)buf, "g") == 0)
-            {
-            servo1.write(180); // Set Servos - Values are from 0 to 180
-            servo2.write(0);
-            Serial.println("TURNINGg");
-            }
-            Serial.println((char*)buf);
-        }
-    }
 }
 
 /* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
