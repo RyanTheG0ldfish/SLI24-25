@@ -162,6 +162,45 @@ void loop()
   
   motor1.run(); //run the stepper
   motor2.run(); //run the stepper
+
+
+
+  if (rf95.available())
+    {
+        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+
+        if (rf95.recv(buf, &len)) // if "separate" message detected
+        {
+    
+            if (strcmp((char*)buf, "w") == 0)
+            {
+            motor1.moveTo(1000);
+            motor2.moveTo(2000);
+            }
+            if (strcmp((char*)buf, "s") == 0)
+            {
+            motor1.moveTo(-1000);
+            motor2.moveTo(-2000);
+            }           
+            if (strcmp((char*)buf, "p") == 0)
+            {
+            motor1.moveTo(0);
+            motor2.moveTo(0);
+            }
+            if (strcmp((char*)buf, "k") == 0)
+            {
+            servo1.write(0); // Set Servos - Values are from 0 to 180
+           servo2.write(0);
+            }
+            if (strcmp((char*)buf, "g") == 0)
+            {
+            servo1.write(180); // Set Servos - Values are from 0 to 180
+            servo2.write(180);
+            }
+            Serial.println((char*)buf);
+        }
+    }
 }
 
 /* ENVISIONED FLOW PATTERN OF THIS CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
