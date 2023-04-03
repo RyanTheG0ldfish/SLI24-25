@@ -60,6 +60,65 @@ void loop()
   rf95.waitPacketSent();
   Serial.println("Sending to rf95_server");
      }
+
+
+
+     // Send a message to rf95_server
+ if (strcmp(&serialInput, "w") == 0)
+     {
+  uint8_t data[] = "w";
+
+  rf95.send(data, sizeof(data));
+  
+  rf95.waitPacketSent();
+  Serial.println("Sending to rf95_server");
+     }
+
+
+
+
+     // Send a message to rf95_server
+ if (strcmp(&serialInput, "s") == 0)
+     {
+  uint8_t data[] = "s";
+
+  rf95.send(data, sizeof(data));
+  
+  rf95.waitPacketSent();
+  Serial.println("Sending to rf95_server");
+     }
+
+
+
+
+     // Send a message to rf95_server
+ if (strcmp(&serialInput, "p") == 0)
+     {
+  uint8_t data[] = "p";
+
+  rf95.send(data, sizeof(data));
+  
+  rf95.waitPacketSent();
+  Serial.println("Sending to rf95_server");
+     }
+
+
+
+
+
+     // Send a message to rf95_server
+ if (strcmp(&serialInput, "g") == 0)
+     {
+  uint8_t data[] = "g";
+
+  rf95.send(data, sizeof(data));
+  
+  rf95.waitPacketSent();
+  Serial.println("Sending to rf95_server");
+     }
+
+
+     
      delay(400);
     Serial.println(serialInput);
 }
