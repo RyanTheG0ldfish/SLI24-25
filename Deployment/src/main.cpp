@@ -44,7 +44,7 @@ bool position = false;  //Variable used to run different functions when a comman
 void setup()
 {
     // Serial
-    Serial.begin(115200);
+    Serial.begin(9600);
 
     // GPS
     ss.begin(GPSBaud);
@@ -68,10 +68,10 @@ void setup()
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
     // Stepper Motors
-  motor1.setMaxSpeed(3000);
-  motor1.setAcceleration(100);
-  motor2.setMaxSpeed(3000);
-  motor2.setAcceleration(100);
+  motor1.setMaxSpeed(100);
+  motor1.setAcceleration(10);
+  motor2.setMaxSpeed(100);
+  motor2.setAcceleration(10);
 
   pinMode(6, OUTPUT); //M0 - Setting the step pin to high to initialize full step control
   digitalWrite(6, LOW);
@@ -81,8 +81,8 @@ void setup()
   //Servo Stuff
   servo1.attach(18);   // attaches the servo on pin 9 to the servo object
   servo2.attach(19);   // attaches the servo on pin 9 to the servo object
-  servo1.write(180); // Set Servos - Values are from 0 to 180
-  servo2.write(180); // Set Servos - Values are from 0 to 180
+  servo1.write(0); // Set Servos - Values are from 0 to 180
+  servo2.write(0); // Set Servos - Values are from 0 to 180
 }
 
 
@@ -92,7 +92,7 @@ void loop()
       gps.encode(ss.read());  }
     
     bmp.performReading(); //Altimeter
-
+/*
     if (rf95.available())
     {
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
@@ -131,10 +131,10 @@ void loop()
 
     if(part2 == true) // if separation is done
     {
-        servo1.write(0); // Set Servos - Values are from 0 to 180
-        servo2.write(0);  //Set Servos - Values are from 0 to 180
-        uint8_t data[] = "Separated"; // Prepare Done Message
-        rf95.send(data, sizeof(data));  //Send Done Message
+      //  servo1.write(0); // Set Servos - Values are from 0 to 180
+        //servo2.write(0);  //Set Servos - Values are from 0 to 180
+      //  uint8_t data[] = "Separated"; // Prepare Done Message
+      //  rf95.send(data, sizeof(data));  //Send Done Message
         part2 == false; //stops this command from running again
     }
 
@@ -159,7 +159,7 @@ void loop()
         }
         rf95.send(data, lng.length());
     }
-  
+  */
   motor1.run(); //run the stepper
   motor2.run(); //run the stepper
 
@@ -172,7 +172,12 @@ void loop()
 
         if (rf95.recv(buf, &len)) // if "separate" message detected
         {
-    
+            if (strcmp((char*)buf, "k") == 0)
+            {
+            servo1.write(0); // Set Servos - Values are from 0 to 180
+           servo2.write(180);
+           Serial.println("TURNINGk");
+            }
             if (strcmp((char*)buf, "w") == 0)
             {
             motor1.moveTo(1000);
@@ -188,15 +193,11 @@ void loop()
             motor1.moveTo(0);
             motor2.moveTo(0);
             }
-            if (strcmp((char*)buf, "k") == 0)
-            {
-            servo1.write(0); // Set Servos - Values are from 0 to 180
-           servo2.write(0);
-            }
             if (strcmp((char*)buf, "g") == 0)
             {
             servo1.write(180); // Set Servos - Values are from 0 to 180
-            servo2.write(180);
+            servo2.write(0);
+            Serial.println("TURNINGg");
             }
             Serial.println((char*)buf);
         }
