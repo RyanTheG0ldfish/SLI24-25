@@ -1,36 +1,23 @@
 #include <Arduino.h>
-#include <Adafruit_GFX.h>
+#include <SPI.h>
+#include <Servo.h>
 #include <Adafruit_BMP3XX.h>
-#include <TinyGPSPlus.h>
+#include <Adafruit_LSM6DSO32.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <RH_RF95.h>
-#include <RHReliableDatagram.h>
-#include <Adafruit_LSM6DSO32.h>
-#include <servo.h>
+#include <TinyGPSPlus.h>
+
+RH_RF95 rf95(10, 7);        // Singleton instance of the radio driver
+
+#define BMP_CS 6
+#define SEALEVELPRESSURE_HPA (1021.3)
 
 #define LSM_CS 9  // For SPI mode, we need a CS pin
+
+Adafruit_BMP3XX bmp; //bmp390
 Adafruit_LSM6DSO32 dso32;
-
-#define CLIENT_ADDRESS 1
-#define SERVER_ADDRESS 2
-static const int RXPin = 0, TXPin = 1; //CHECK IF THIS IS CORRECT
-static const uint32_t GPSBaud = 9600;
-TinyGPSPlus gps;
-SoftwareSerial ss(RXPin, TXPin);
-
-Adafruit_BMP3XX bmp = Adafruit_BMP3XX();
-#define BMP_SCK 13
-#define BMP_MISO 12
-#define BMP_Mosi 11
-#define BMP_CS 4
-#define SEALEVELPRESSURE_HPA (1013.25)
-//VERIFY ALL OF THESE ARE RIGHT OR WRONG
-
-RH_RF95 driver(3, 20); // CHECK IF CORRRECT
-
-RHReliableDatagram manager(driver, CLIENT_ADDRESS);
 
 Servo escFL;
 Servo escFR;
@@ -44,6 +31,15 @@ uint32_t motorTime = 0;
 uint32_t armTime = 0;
 uint32_t lastTime = 0;
 
+TinyGPSPlus gps;
+
+double altitudeSetpoint = 0.0;
+double pitchSetpoint = 0.0;
+
+double targetLat = 0.0;
+double targetLng = 0.0;
+double targetHeading = 0.0;
+
 double velocityX;
 double velocityY;
 double velocityZ;
@@ -54,21 +50,34 @@ double gyroYaw;
 enum MotorMode
 {
     Arm,
-    Operate,
+    Disabled,
+    Hold,
+    Navigate,
+    Land
 };
 
 MotorMode motorMode = Arm;
 
+double rollSum;
+double rollPrev;
+double pitchSum = 0.0;
+double pitchPrev = 0.0;
+double yawSum;
+double yawPrev;
+double altSum;
+double altPrev;
 
-double pidCalculate(double input, double setpoint, double p, double i, double d, double &prevError, double &errorSum)
+double pidCalculate(double input, double setpoint, double p, double i, double d, double * const &prevError, double * const &errorSum, double timeDiff)
 {
     double error = setpoint - input;
-}
 
+    *errorSum += error * timeDiff;
 
-void updateGyro()
-{
+    double pTerm = p * error;
+    double iTerm = i * *errorSum;
+    double dTerm = d * (error - *prevError) * timeDiff;
 
+    return pTerm + iTerm + dTerm;
 }
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
@@ -82,7 +91,8 @@ void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro
         Serial.println(" hPa");
         Serial.print("Alt: ");
         Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084);
-        Serial.println(" ft");
+        Serial.print(" ft ");
+        Serial.println(altitudeSetpoint * 3.28084);
 
         Serial.print("Temperature ");
         Serial.print((temp.temperature) * 1.8 + 32);
@@ -110,156 +120,144 @@ void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro
         Serial.print(gyroPitch);
         Serial.print("\tRoll: ");
         Serial.println(gyroRoll);
+        Serial.print("\tYaw: ");
+        Serial.println(gyroYaw);
 
-        Serial.println(output);
+        Serial.println(gps.location.lat(), 8);
+        Serial.println(gps.location.lng(), 8);
+        Serial.println(gps.satellites.value());
+
+        switch (motorMode)
+        {
+        case Arm:
+            Serial.println(output);
+            break;
+
+        case Disabled:
+            Serial.println("Disabled");
+            break;
+
+        case Hold:
+            Serial.println("Hold");
+            break;
+
+        case Navigate:
+            Serial.println("Navigate");
+            break;
+
+        case Land:
+            Serial.println("Land");
+            break;
+        
+        default:
+            break;
+        }
+        
 }
 
 void setMotor(Servo motor, double percentOutput)
 {
-
+    // 1488 - 1832
+    percentOutput = (percentOutput > 1.0) ? 1.0 : (percentOutput < -1.0) ? -1.0 : percentOutput;
+    motor.writeMicroseconds((int) (1488 + percentOutput*200 ) - (percentOutput < 0 ? 50 : 0));
 }
 
-void setup() {
-Serial.begin(115200); //serial for everything
-
-ss.begin(GPSBaud); //Intiialize GPS
-
-if (! bmp.begin_SPI(BMP_CS)) {  // Initialize BMP3XX
-    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-  }
-  // Set up oversampling and filter initialization -- Initialize BMP3XX
-  bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-  bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-  bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-  bmp.setOutputDataRate(BMP3_ODR_50_HZ);
-
-if (!dso32.begin_SPI(LSM_CS)) { //Initialize Gyro
-     Serial.println("Failed to find LSM6DSO32 chip");
-  }
-  // Set up Ranges for Gyro
-  dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE_4_G);
-  dso32.setGyroRange(LSM6DS_GYRO_RANGE_500_DPS);
-  dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
-  dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
-
-  //Custom Motor Control Stuff
-  escFL.attach(2);
-  escFR.attach(3);
-  escBL.attach(4);
-  escBR.attach(5);
-
-  //More Custom Motor Control Stuff
-  escFL.writeMicroseconds(output);
-  escFR.writeMicroseconds(output);
-  escBL.writeMicroseconds(output);
-  escBR.writeMicroseconds(output);
-
-  //More of Ethan's Stuff
-  uint32_t time = millis();
-  lastTime = time;
-  armTime = time;
-  printTime = time;
-
-
-if (!manager.init())  //Initialize Radio
-    Serial.println("Radio init failed");
-  // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-
-  // The default transmitter power is 13dBm, using PA_BOOST.
-  // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then 
-  // you can set transmitter powers from 2 to 20 dBm:
-//  driver.setTxPower(20, false);
-  // If you are using Modtronix inAir4 or inAir9, or any other module which uses the
-  // transmitter RFO pins and not the PA_BOOST pins
-  // then you can configure the power transmitter power for 0 to 15 dBm and with useRFO true. 
-  // Failure to do that will result in extremely low transmit powers.
-//  driver.setTxPower(14, true);
-
-  // You can optionally require this module to wait until Channel Activity
-  // Detection shows no activity on the channel before transmitting by setting
-  // the CAD timeout to non-zero:
-//  driver.setCADTimeout(10000);
-
-}
-
-//This is for the radio
-uint8_t data[] = "Success";
-// Dont put this on the stack: (Also for Radio)
-uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-
-void loop() {
-  // This currently displays information every time a new sentence is correctly encoded.
-  if (millis() > 5000 && gps.charsProcessed() < 10)
-  {
-    Serial.println(F("No GPS detected: check wiring."));
-    while(true);
-  }
-
-  /* SERVER SIDE RF95
- Serial.println("Sending to rf95_reliable_datagram_server");
-if (manager.available())
-  {
-    // Wait for a message addressed to us from the client
-    uint8_t len = sizeof(buf);
-    uint8_t from;
-    if (manager.recvfromAck(buf, &len, &from))
+void setMotor(Servo motor, double percentOutput, boolean invert)
+{
+    if (percentOutput < 0.0)
     {
-      Serial.print("got request from : 0x");
-      Serial.print(from, HEX);
-      Serial.print(": ");
-      Serial.println((char*)buf);
-      // Send a reply back to the originator client
-      if (!manager.sendtoWait(data, sizeof(data), from))
-        Serial.println("sendtoWait failed");
+        percentOutput = 0.0;
     }
-  }
-  */
 
-  /*      CLIENT SIDE RF95
-  // Send a message to manager_server
-  if (manager.sendtoWait(data, sizeof(data), SERVER_ADDRESS))
-  {
-    // Now wait for a reply from the server
-    uint8_t len = sizeof(buf);
-    uint8_t from;   
-    if (manager.recvfromAckTimeout(buf, &len, 2000, &from))
+    if (invert)
     {
-      Serial.print("got reply from : 0x");
-      Serial.print(from, HEX);
-      Serial.print(": ");
-      Serial.println((char*)buf);
-    }
-    else
-    {
-      Serial.println("No reply, is rf95_reliable_datagram_server running?");
-    }
-  }
-  else
-    Serial.println("sendtoWait failed");
-  delay(500);
-  */
-
- uint32_t time = micros();
-
-    if (Serial.available())
-    {
-        char serialInput = Serial.read();
-        if (strcmp(&serialInput, "s") == 0)
-        {
-            output = 1488;
-        }
-
-        if (strcmp(&serialInput, "a") == 0)
-        {
-            output -= 1;
-        }
-
-        if (strcmp(&serialInput, "d") == 0)
-        {
-            output += 1;
-        }
+        percentOutput *= -1;
     }
     
+    setMotor(motor, percentOutput);
+}
+
+void setup()
+{
+    Serial.begin(57600);
+    Serial.println("Initialized");
+
+    Serial1.begin(9600);
+
+     if (!rf95.init())
+        Serial.println("Radio init failed");
+
+    if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
+    {
+        Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+        while (true);
+    }
+
+    // Set up oversampling and filter initialization
+    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+
+    if (!dso32.begin_SPI(LSM_CS)) {
+        Serial.println("Failed to find LSM6DSO32 chip");
+        while (true) {}
+    }
+
+    dso32.setAccelRange(LSM6DSO32_ACCEL_RANGE_4_G);
+    dso32.setGyroRange(LSM6DS_GYRO_RANGE_500_DPS);
+    dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
+    dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
+
+    escFL.attach(3);
+    escFR.attach(2);
+    escBL.attach(4);
+    escBR.attach(18);
+
+    escFL.writeMicroseconds(output);
+    escFR.writeMicroseconds(output);
+    escBL.writeMicroseconds(output);
+    escBR.writeMicroseconds(output);
+
+    uint32_t time = millis();
+
+    lastTime = time;
+    armTime = time;
+    printTime = time;
+
+}
+
+void loop()
+{
+    uint32_t time = micros();
+    double timeDiff = (double)(time-lastTime) / 1000000.0;
+
+ if (rf95.available())
+    {
+        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+
+        if (rf95.recv(buf, &len)) // if "separate" message detected
+        {
+            if (strcmp((char*)buf, "k") == 0)
+            {
+                if (motorMode != Arm)
+                {
+                    motorMode = Disabled;
+                }
+                else if (motorMode == Disabled)
+                {
+                    motorMode = Hold;
+                }            
+            }
+        }
+    }
+
+    while (Serial1.available() > 0)
+    {
+        gps.encode(Serial1.read());
+    }
+
     if (!bmp.performReading())
     {
         Serial.println("Failed to perform altimeter reading");
@@ -276,21 +274,35 @@ if (manager.available())
 
     gyroRoll=-atan(accel.acceleration.x/sqrt(accel.acceleration.y*accel.acceleration.y+accel.acceleration.z*accel.acceleration.z))*1/(3.142/180);
     gyroPitch=atan(accel.acceleration.y/sqrt(accel.acceleration.x*accel.acceleration.x+accel.acceleration.z*accel.acceleration.z))*1/(3.142/180);
+    gyroYaw+=(gyro.gyro.z+0.008)*timeDiff/(3.142/180);
+        
+    double alt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
-    if (time - motorTime > 10000)
+    if (millis() - armTime > 10000 && motorMode == Arm)
     {
-        motorTime = time;
-
-        if (millis() - armTime > 10000)
-        {
-            motorMode = Operate;
-        }
+        altitudeSetpoint = alt + 0.2; // 1 meter
+        motorMode = Disabled;
     }
 
-    escFL.writeMicroseconds(output);
-    escFR.writeMicroseconds(output);
-    escBL.writeMicroseconds(output);
-    escBR.writeMicroseconds(output);
+    double pitchOutput = pidCalculate(gyroPitch, 0.0, 0.005, 0.0, 0.0, &pitchPrev, &pitchSum, timeDiff); //Setpoint, P, I, D
+    double rollOuput   = pidCalculate(gyroRoll,  0.0, 0.005, 0.0, 0.0, &rollPrev,  &rollSum, timeDiff);
+    double yawOutput   = pidCalculate(gyroYaw,   0.0, 0.0, 0.0, 0.0, &yawPrev,   &yawSum, timeDiff);
+    double altOutput   = pidCalculate(alt, altitudeSetpoint, 0.0, 0.0, 0.0, &altPrev,   &altSum, timeDiff) + 0.7;
+
+    if (motorMode != Arm && motorMode != Disabled)
+    {
+        setMotor(escFL, altOutput + rollOuput + pitchOutput + yawOutput, false);
+        setMotor(escFR, altOutput - rollOuput + pitchOutput - yawOutput, true);
+        setMotor(escBL, altOutput + rollOuput - pitchOutput - yawOutput, true);
+        setMotor(escBR, altOutput - rollOuput - pitchOutput + yawOutput, false);
+    }
+    else
+    {
+        setMotor(escFL, 0.0);
+        setMotor(escFR, 0.0);
+        setMotor(escBL, 0.0);
+        setMotor(escBR, 0.0);
+    }
     
     if (time - printTime > 1000000)
     {
@@ -299,21 +311,4 @@ if (manager.available())
     }
 
     lastTime = time;
-
 }
-
-/* ENVISIONED FLOW PATTERN OF THIS UAV CODE IN REAL LIFE ----------------------------------------------------------------------------------------------
-1) Power on - Set motors to 0 - power off (getting powered off by other board)
-2) Power on once landed (done by other board
-3) Receive data communication from other board - either wired or wirelessly
-  - This is GPS, altitude, etc. data.
-4) Get command to launch from other board
-  - Launch once all systems are ready to go
-5) Level off @ 10 feet off the ground using garmin lidar
-6) Use GPS heading information to geolocate where to go to handheld controller
-7) Using GPS, subtract the two points to get a target location to fly to - and fly to it.
-8) Once uav reaches handheld controller - wait for handheld controller to give signal to go back.
-9) Target the location of the Deployment GPS, maintaining X distance away from the handheld controller
-10) Go to X feet to the right of the rocket and hover
-11) land once land command is given
-*/
