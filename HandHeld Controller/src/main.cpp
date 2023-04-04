@@ -85,10 +85,8 @@ if(rf95.available())
 if(position == true)
 {
         uint8_t data[24];
-      
-       //Need to send a letter first for latitude
        
-       String lat = String(gps.location.lat(), 8);
+       String lat = String("hlat") + String(gps.location.lat(), 8);
 
         for (int i = 0; i < lat.length(); i++)
         {
@@ -97,9 +95,8 @@ if(position == true)
         rf95.send(data, lat.length());
         
         delay(5);
-        //Need to send a letter first for longitude
         
-        String lng = String(gps.location.lng(), 8);
+        String lng = String("hlng") + String(gps.location.lng(), 8);
         for (int i = 0; i < lng.length(); i++)
         {
             data[i] = lng.charAt(i);
@@ -107,10 +104,8 @@ if(position == true)
         rf95.send(data, lng.length());
     
         delay(5);
-
-        //Need to send a letter first for altitude
        
-       String alt = String(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084, 8);
+       String alt = String("halt") + String(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084, 8);
         for (int i = 0; i < lng.length(); i++)
         {
             data[i] = alt.charAt(i);
@@ -119,7 +114,7 @@ if(position == true)
        
        delay(5);
 
-        position == false;
+        position = false;
     }
 
 Serial.println(serialInput);
