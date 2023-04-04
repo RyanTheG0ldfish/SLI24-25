@@ -105,7 +105,7 @@ void loop()
             {
              
              separate == false; //Stops this function from running
-             part2 == true;     //Makes a different function start running    
+             part2 = true;     //Makes a different function start running    
             }  
     }
 
@@ -113,7 +113,7 @@ void loop()
     {
         servo1.write(0); // Set Servos - Values are from 0 to 180
         servo2.write(180);  //Set Servos - Values are from 0 to 180
-        part2 == false; //stops this command from running again
+        part2 = false; //stops this command from running again
     }
 
     if(position == true)  // if "get position" message is received
