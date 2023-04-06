@@ -68,17 +68,27 @@ double yawPrev;
 double altSum;
 double altPrev;
 
-double pidCalculate(double input, double setpoint, double p, double i, double d, double *const &prevError, double *const &errorSum, double timeDiff)
+double pidCalculate(double input, double setpoint, double p, double i, double d, double * const &prevError, double * const &errorSum, double outputRange, double timeDiff)
 {
+    outputRange = abs(outputRange);
+
     double error = setpoint - input;
 
     *errorSum += error * timeDiff;
+
+    if (i != 0.0)
+    { 
+        double maxSum = abs(outputRange * p / i);
+        *errorSum = *errorSum < -maxSum ? -maxSum : *errorSum > maxSum ? maxSum : *errorSum;
+    }
 
     double pTerm = p * error;
     double iTerm = i * *errorSum;
     double dTerm = d * (error - *prevError) * timeDiff;
 
-    return pTerm + iTerm + dTerm;
+    double output = pTerm + iTerm + dTerm;
+
+    return output < -outputRange ? -outputRange : output > outputRange ? outputRange : output;
 }
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
@@ -288,19 +298,11 @@ void loop()
         motorMode = Disabled;
     }
 
-    if ((motorMode == NavigateHands || motorMode == NavigateRocket) && abs(gyroYaw) < 90)
-    {
-        pitchSetpoint = 0.5 * cos(gyroYaw * 3.14 / 180);
-    }
-    else
-    {
-        pitchSetpoint = 0.0;
-    }
-
-    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, 0.003, 0.00, 0.00000, &pitchPrev, &pitchSum, timeDiff); // Setpoint, P, I, D
-    double rollOuput = pidCalculate(gyroRoll, 0.0, 0.0025, 0.0, 0.00, &rollPrev, &rollSum, timeDiff);
-    double yawOutput = pidCalculate(gyroYaw, 0.0, 0.000, 0.0, 0.0, &yawPrev, &yawSum, timeDiff);
-    double altOutput = pidCalculate(alt, altitudeSetpoint, 0.000, 0.0, 0.0, &altPrev, &altSum, timeDiff) + 0.50;
+    //                                current,   sp,   p,      i,        d,       prev,    sum,     range, dt
+    double pitchOutput = pidCalculate(gyroPitch, 0.0, 0.002,  0.000033, 0.00015, &pitchPrev, &pitchSum, 0.4, timeDiff);
+    double rollOuput   = pidCalculate(gyroRoll,  0.0, 0.0033, 0.00004,  0.00025, &rollPrev,  &rollSum,  0.4, timeDiff);
+    double yawOutput   = pidCalculate(gyroYaw,   0.0, 0.0,    0.0,      0.0,     &yawPrev,   &yawSum,   0.3, timeDiff);
+    double altOutput   = pidCalculate(alt, altitudeSetpoint, 0.0, 0.0,  0.0,     &altPrev,   &altSum,   0.4, timeDiff) + 0.48;
 
     if (motorMode != Arm && motorMode != Disabled)
     {
