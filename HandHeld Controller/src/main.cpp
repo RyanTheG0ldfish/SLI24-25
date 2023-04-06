@@ -2,9 +2,9 @@
 #include <RH_RF95.h>
 #include <TinyGPSPlus.h>
 #include <Adafruit_BMP3XX.h>
-#define BMP_CS 6
-#define SEALEVELPRESSURE_HPA (1021.3)
-Adafruit_BMP3XX bmp; // bmp390
+//#define BMP_CS 6
+//#define SEALEVELPRESSURE_HPA (1021.3)
+//Adafruit_BMP3XX bmp; // bmp390
 RH_RF95 rf95(10, 8); // Singleton instance of the radio driver
 TinyGPSPlus gps;
 bool position = false;
@@ -16,44 +16,46 @@ void setup()
     {
         Serial.println("init failed");
     }                           // Defaults after init are 434.0MHz, 13dBm, Bw = 125 kHz, Cr = 4/5, Sf = 128chips/symbol, CRC on
-    if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
-    {
-        Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-        while (true)
-            ;
-    }
+   // if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
+   // {
+   //     Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+   //     while (true)
+   //         ;
+   // }
     // Set up oversampling and filter initialization
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+   // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+   // bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+   // bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+   // bmp.setOutputDataRate(BMP3_ODR_50_HZ);
     // rf95.setModemConfig(RH_RF95::Bw500Cr45Sf128); // You can change the modulation parameters with eg
     // rf95.setTxPower(20, false); //The default transmitter power is 13dBm, using PA_BOOST. - If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 2 to 20 dBm:
 }
 
 void loop()
 {
-    char serialInput = Serial.read();
-    Serial.println("waiting");
 
-    if (!bmp.performReading())
-    {
-        Serial.println("Failed to perform altimeter reading");
-    }
+ //   if (!bmp.performReading())
+ //   {
+  //      Serial.println("Failed to perform altimeter reading");
+ //   }
     while (Serial1.available() > 0)
     {
         gps.encode(Serial1.read());
     }
 
+    if (Serial.available())
     {
-        if (strcmp(&serialInput, "k") == 0)
+        char serialInput = Serial.read();
+
+        if (strcmp(&serialInput, "k"))
         {
+            //Serial.println("detected key k");
             uint8_t data[] = "k";
             rf95.send(data, sizeof(data));
             rf95.waitPacketSent();
             Serial.println("Sending to rf95_server");
         }
-
+/*
         if (strcmp(&serialInput, "s") == 0)
         {
             uint8_t data[] = "separate";
@@ -120,7 +122,8 @@ void loop()
 
         position = false;
     }
-
-    Serial.println(serialInput);
-    delay(400);
+*/
+        Serial.println(serialInput);
+        delay(400);
+    }
 }
