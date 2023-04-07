@@ -252,6 +252,7 @@ void loop()
 {
     uint32_t time = micros();
     double timeDiff = (double)(time - lastTime) / 1000000.0;
+    lastTime = time;
 
     pitchSetpoint /= 1.008;
     rollSetpoint /= 1.008;
@@ -351,7 +352,7 @@ void loop()
 
     if (motorMode != Arm && motorMode != Disabled)
     {
-        double Hover = 0.4;
+        double Hover = 0.2;
         double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
         double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
         double BLout = altOutput + rollOuput - pitchOutput - yawOutput;
