@@ -26,15 +26,16 @@ Servo escBR;
 
 int output = 1488;
 
-uint32_t printTime = 0;
-uint32_t motorTime = 0;
-uint32_t armTime = 0;
-uint32_t lastTime = 0;
+uint32_t printTime;
+uint32_t motorTime;
+uint32_t armTime;
+uint32_t lastTime;
 
 TinyGPSPlus gps;
 
 double altitudeSetpoint = 0.0;
 double pitchSetpoint = 0.0;
+double rollSetpoint = 0.0;
 
 double targetLat = 0.0;
 double targetLng = 0.0;
@@ -68,18 +69,16 @@ double yawPrev;
 double altSum;
 double altPrev;
 
-double pidCalculate(double input, double setpoint, double p, double i, double d, double * const &prevError, double * const &errorSum, double outputRange, double timeDiff)
+double pidCalculate(double input, double setpoint, double p, double i, double d, double* const &prevError, double* const &errorSum, double outputRange, double timeDiff)
 {
-    outputRange = abs(outputRange);
-
     double error = setpoint - input;
 
     *errorSum += error * timeDiff;
 
     if (i != 0.0)
     { 
-        double maxSum = abs(outputRange * p / i);
-        *errorSum = *errorSum < -maxSum ? -maxSum : *errorSum > maxSum ? maxSum : *errorSum;
+        double maxSum = outputRange * p / i;
+        *errorSum = (*errorSum < -maxSum) ? -maxSum : (*errorSum > maxSum) ? maxSum : *errorSum;
     }
 
     double pTerm = p * error;
@@ -88,7 +87,17 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
 
     double output = pTerm + iTerm + dTerm;
 
-    return output < -outputRange ? -outputRange : output > outputRange ? outputRange : output;
+    if (output < -outputRange && outputRange >= 0.0)
+    {
+        output = -outputRange;
+    }
+
+    if (output > outputRange && outputRange >= 0.0)
+    {
+        output = outputRange;
+    }
+
+    return output;
 }
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
@@ -190,7 +199,7 @@ void setMotor(Servo motor, double percentOutput, boolean invert)
 
 void setup()
 {
-    Serial.begin(57600);
+    Serial.begin(9600);
     Serial.println("Initialized");
 
     Serial1.begin(9600);
@@ -234,17 +243,18 @@ void setup()
     escBL.writeMicroseconds(output);
     escBR.writeMicroseconds(output);
 
-    uint32_t time = millis();
-
-    lastTime = time;
-    armTime = time;
-    printTime = time;
+    armTime = millis();
+    printTime = micros();
+    lastTime = micros();
 }
 
 void loop()
 {
     uint32_t time = micros();
     double timeDiff = (double)(time - lastTime) / 1000000.0;
+
+    pitchSetpoint /= 1.008;
+    rollSetpoint /= 1.008;
 
     if (rf95.available())
     {
@@ -253,7 +263,7 @@ void loop()
 
         if (rf95.recv(buf, &len)) // if "separate" message detected
         {
-            if (strcmp((char *)buf, "k") == 0)
+            if (strcmp((char *)buf, "key:k") == 0)
             {
                 if (motorMode != Arm && motorMode != Disabled)
                 {
@@ -263,6 +273,36 @@ void loop()
                 {
                     motorMode = Hold;
                 }
+            }
+
+            if (strcmp((char *)buf, "key: ") == 0)
+            {
+                altitudeSetpoint += 0.1;
+            }
+
+            if (strcmp((char *)buf, "key:v") == 0)
+            {
+                altitudeSetpoint += -0.1;
+            }
+
+            if (strcmp((char *)buf, "key:w") == 0)
+            {
+                pitchSetpoint = -5.0;
+            }
+
+            if (strcmp((char *)buf, "key:s") == 0)
+            {
+                pitchSetpoint = 5.0;
+            }
+
+            if (strcmp((char *)buf, "key:a") == 0)
+            {
+                rollSetpoint = 5.0;
+            }
+
+            if (strcmp((char *)buf, "key:d") == 0)
+            {
+                rollSetpoint = -5.0;
             }
         }
     }
@@ -294,15 +334,20 @@ void loop()
 
     if (motorMode == Arm && millis() - armTime > 10000)
     {
-        altitudeSetpoint = alt + 0.2; // meter
+        altitudeSetpoint = alt + 0; // meter
         motorMode = Disabled;
     }
 
-    //                                current,   sp,   p,      i,        d,       prev,    sum,     range, dt
-    double pitchOutput = pidCalculate(gyroPitch, 0.0, 0.002,  0.000033, 0.00015, &pitchPrev, &pitchSum, 0.4, timeDiff);
-    double rollOuput   = pidCalculate(gyroRoll,  0.0, 0.0033, 0.00004,  0.00025, &rollPrev,  &rollSum,  0.4, timeDiff);
-    double yawOutput   = pidCalculate(gyroYaw,   0.0, 0.0,    0.0,      0.0,     &yawPrev,   &yawSum,   0.3, timeDiff);
-    double altOutput   = pidCalculate(alt, altitudeSetpoint, 0.0, 0.0,  0.0,     &altPrev,   &altSum,   0.4, timeDiff) + 0.48;
+    if (motorMode != Arm && accel.acceleration.z < 0.0)
+    {
+        motorMode = Disabled;
+    }
+
+    //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
+    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, 0.003, 0.0001,   0.090, &pitchPrev, &pitchSum, 0.05, timeDiff);
+    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  0.004,  0.0001,  0.119, &rollPrev,  &rollSum,  0.067, timeDiff);
+    double yawOutput   = pidCalculate(gyroYaw,   0.0,           0.0,    0.0,     0.0,    &yawPrev,   &yawSum,   0.0, timeDiff);
+    double altOutput   = pidCalculate(alt, altitudeSetpoint,    0.001,   0.0001, 0.0,    &altPrev,   &altSum,   0.0, timeDiff) + 0.565;
 
     if (motorMode != Arm && motorMode != Disabled)
     {
@@ -314,7 +359,7 @@ void loop()
 
         setMotor(escFL, FLout > Hover ? FLout : Hover, true);
         setMotor(escFR, FRout > Hover ? FRout : Hover, false);
-        setMotor(escBL, BLout > Hover ? BLout : Hover, false);
+        setMotor(escBL, (BLout > Hover ? BLout  : Hover) / 1.391, false);
         setMotor(escBR, BRout > Hover ? BRout : Hover, true);
     }
     else
@@ -328,6 +373,7 @@ void loop()
     if (time - printTime > 1000000)
     {
         printTime = time;
+        Serial.print(timeDiff, 6);
         printData(temp, accel, gyro);
     }
 

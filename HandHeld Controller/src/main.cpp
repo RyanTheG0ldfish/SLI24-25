@@ -8,6 +8,9 @@
 RH_RF95 rf95(10, 8); // Singleton instance of the radio driver
 TinyGPSPlus gps;
 bool position = false;
+
+uint32_t printTime = 0;
+
 void setup()
 {
     Serial.begin(9600);
@@ -29,10 +32,12 @@ void setup()
    // bmp.setOutputDataRate(BMP3_ODR_50_HZ);
     // rf95.setModemConfig(RH_RF95::Bw500Cr45Sf128); // You can change the modulation parameters with eg
     // rf95.setTxPower(20, false); //The default transmitter power is 13dBm, using PA_BOOST. - If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 2 to 20 dBm:
+    printTime = micros();
 }
 
 void loop()
 {
+    uint32_t time = micros();
 
  //   if (!bmp.performReading())
  //   {
@@ -47,13 +52,20 @@ void loop()
     {
         char serialInput = Serial.read();
 
-        if (strcmp(&serialInput, "k"))
+        if (strcmp(&serialInput, "k") == 0)
         {
-            //Serial.println("detected key k");
-            uint8_t data[] = "k";
+            uint8_t data[] = "key:k";
             rf95.send(data, sizeof(data));
             rf95.waitPacketSent();
-            Serial.println("Sending to rf95_server");
+            Serial.print("Sending to rf95_server: ");
+        }
+
+        if (strcmp(&serialInput, " ") == 0)
+        {
+            uint8_t data[] = "key: ";
+            rf95.send(data, sizeof(data));
+            rf95.waitPacketSent();
+            Serial.print("Sending to rf95_server: ");
         }
 /*
         if (strcmp(&serialInput, "s") == 0)
@@ -71,7 +83,7 @@ void loop()
             rf95.waitPacketSent();
             Serial.println("Sending to rf95_server");
         }
-    }
+    }*/
 
     if (rf95.available())
     {
@@ -80,14 +92,15 @@ void loop()
 
         if (rf95.recv(buf, &len)) // if "separate" message detected
         {
-            if (strcmp((char *)buf, "handpos") == 0)
-            {
-                position = true; // set separate to true
-            }
+            // if (strcmp((char *)buf, "handpos") == 0)
+            // {
+            //     position = true; // set separate to true
+            // }
             Serial.println((char *)buf);
         }
     }
 
+    /*
     if (position == true)
     {
         uint8_t data[24];
@@ -124,6 +137,12 @@ void loop()
     }
 */
         Serial.println(serialInput);
-        delay(400);
+        printTime = time;
+    }
+
+    if (time - printTime > 5000000)
+    {
+        Serial.println("Waiting for input...");
+        printTime = time;
     }
 }
