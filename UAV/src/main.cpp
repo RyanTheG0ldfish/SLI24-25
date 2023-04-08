@@ -278,32 +278,32 @@ void loop()
 
             if (strcmp((char *)buf, "key: ") == 0)
             {
-                altitudeSetpoint += 0.1;
+                altitudeSetpoint += 0.01;
             }
 
             if (strcmp((char *)buf, "key:v") == 0)
             {
-                altitudeSetpoint += -0.1;
+                altitudeSetpoint += -0.01;
             }
 
             if (strcmp((char *)buf, "key:w") == 0)
             {
-                pitchSetpoint = -5.0;
+                pitchSetpoint = -0.1;
             }
 
             if (strcmp((char *)buf, "key:s") == 0)
             {
-                pitchSetpoint = 5.0;
+                pitchSetpoint = 0.1;
             }
 
             if (strcmp((char *)buf, "key:a") == 0)
             {
-                rollSetpoint = 5.0;
+                rollSetpoint = 0.1;
             }
 
             if (strcmp((char *)buf, "key:d") == 0)
             {
-                rollSetpoint = -5.0;
+                rollSetpoint = -0.1;
             }
         }
     }
@@ -344,15 +344,43 @@ void loop()
         motorMode = Disabled;
     }
 
+
+    /*  Ziegler-Nichols PID Tuning Method
+        U = P value when starting to go unstable (Oscillating)
+        T = Oscillation period
+        Equation : 
+        P = 0.6 * U
+        I = 1.2 * (U/T)
+        D = (3*U*T) / 40
+
+        PITCH U=0.0012 because P oscillated then during testing
+        T = ~1 Second   
+    */
+
+     double PUltimate = 0.0017; 
+     double PPeriod = 0.8; 
+//double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
+    
+     double RUltimate = 0.0022;
+     double RPeriod = 0.50;
+//double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
+
+     double YUltimate = 0.0017;
+     double YPeriod = 2.5;
+//double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
+
+     double AUltimate = 0;
+     double APeriod = 0;
+
     //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
-    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, 0.003, 0.0001,   0.090, &pitchPrev, &pitchSum, 0.05, timeDiff);
-    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  0.004,  0.0001,  0.119, &rollPrev,  &rollSum,  0.067, timeDiff);
-    double yawOutput   = pidCalculate(gyroYaw,   0.0,           0.0,    0.0,     0.0,    &yawPrev,   &yawSum,   0.0, timeDiff);
-    double altOutput   = pidCalculate(alt, altitudeSetpoint,    0.001,   0.0001, 0.0,    &altPrev,   &altSum,   0.0, timeDiff) + 0.565;
+    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
+    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
+    double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
+    double altOutput   = pidCalculate(alt, altitudeSetpoint,    0.000,   0.0001, 0.0,    &altPrev,   &altSum,   0.0, timeDiff) + 0.565; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
 
     if (motorMode != Arm && motorMode != Disabled)
     {
-        double Hover = 0.2;
+        double Hover = 0.3;
         double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
         double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
         double BLout = altOutput + rollOuput - pitchOutput - yawOutput;
