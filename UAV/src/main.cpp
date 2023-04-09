@@ -47,6 +47,9 @@ double velocityZ;
 double gyroPitch;
 double gyroRoll;
 double gyroYaw;
+bool ReadySwitch = false;
+double currentvalue = 0.00;
+double maxvalue = 0.00;
 
 enum MotorMode
 {
@@ -55,7 +58,8 @@ enum MotorMode
     Hold,
     NavigateHands,
     NavigateRocket,
-    Land
+    Land,
+    Starting
 };
 
 MotorMode motorMode = Arm;
@@ -68,6 +72,24 @@ double yawSum;
 double yawPrev;
 double altSum;
 double altPrev;
+
+     double PUltimate = 0.0017; 
+     double PPeriod = 0.8; 
+//double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
+    
+     double RUltimate = 0.0022;
+     double RPeriod = 0.50;
+//double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
+
+     double YUltimate = 0.0017;
+     double YPeriod = 2.5;
+//double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
+
+     double AUltimate = 0.0099;
+     double APeriod = 0;
+
+     double constanthovering = 0.40;
+
 
 double pidCalculate(double input, double setpoint, double p, double i, double d, double* const &prevError, double* const &errorSum, double outputRange, double timeDiff)
 {
@@ -169,6 +191,10 @@ void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro
         Serial.println("Land");
         break;
 
+    case Starting:
+        Serial.println("Starting");
+        break;
+
     default:
         break;
     }
@@ -268,43 +294,141 @@ void loop()
             {
                 if (motorMode != Arm && motorMode != Disabled)
                 {
-                    motorMode = Disabled;
+                    motorMode = Land;
+                    currentvalue = 0;
                 }
-                else if (motorMode == Disabled)
+                else if (motorMode == Disabled && motorMode != Land)
                 {
-                    motorMode = Hold;
+                    motorMode = Starting;
                 }
             }
+
+/* MotorModes
+    Arm,
+    Disabled,
+    Hold,
+    NavigateHands,
+    NavigateRocket,
+    Land,
+    Starting
+*/
+
+//double altOutput   = pidCalculate(alt, altitudeSetpoint,    (0.6*AUltimate), (1.2*(AUltimate/APeriod)), ((3*AUltimate*APeriod)/40),    &altPrev,   &altSum,   0.0, timeDiff) + 0.565;
 
             if (strcmp((char *)buf, "key: ") == 0)
             {
-                altitudeSetpoint += 0.01;
+                motorMode = Disabled;
+                currentvalue = 0;
+                maxvalue = 0;
             }
 
-            if (strcmp((char *)buf, "key:v") == 0)
+            if (strcmp((char *)buf, "key:r") == 0)
             {
-                altitudeSetpoint += -0.01;
-            }
+               constanthovering += 0.001;
+             uint8_t data[24];
 
-            if (strcmp((char *)buf, "key:w") == 0)
-            {
-                pitchSetpoint = -0.1;
-            }
+        String Ahovering = String("Hover") + String(constanthovering, 8);
+        for (int i = 0; i < Ahovering.length(); i++)
+        {
+            data[i] = Ahovering.charAt(i);
+        }
+        rf95.send(data, Ahovering.length());
+            }            
 
-            if (strcmp((char *)buf, "key:s") == 0)
+            if (strcmp((char *)buf, "key:f") == 0)
             {
-                pitchSetpoint = 0.1;
+                constanthovering -= 0.001;
+             uint8_t data[24];
+
+        String Ahovering = String("Hover") + String(constanthovering, 8);
+        for (int i = 0; i < Ahovering.length(); i++)
+        {
+            data[i] = Ahovering.charAt(i);
+        }
+        rf95.send(data, Ahovering.length());
+            }   
+            
+            
+            
+            
+            if (strcmp((char *)buf, "key:q") == 0)
+            {
+                altitudeSetpoint += 0.003048;
+                  uint8_t data[24];
+
+        String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
+        for (int i = 0; i < altitude.length(); i++)
+        {
+            data[i] = altitude.charAt(i);
+        }
+        rf95.send(data, altitude.length());
             }
 
             if (strcmp((char *)buf, "key:a") == 0)
             {
-                rollSetpoint = 0.1;
+                altitudeSetpoint -= 0.003048;
+                  uint8_t data[24];
+
+        String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
+        for (int i = 0; i < altitude.length(); i++)
+        {
+            data[i] = altitude.charAt(i);
+        }
+        rf95.send(data, altitude.length());
+            }
+
+            if (strcmp((char *)buf, "key:w") == 0)
+            {
+                AUltimate += 0.00005;
+                  uint8_t data[24];
+
+        String Ultimate = String("Ultimate") + String(AUltimate, 8);
+        for (int i = 0; i < Ultimate.length(); i++)
+        {
+            data[i] = Ultimate.charAt(i);
+        }
+        rf95.send(data, Ultimate.length());
+            }
+
+            if (strcmp((char *)buf, "key:s") == 0)
+            {
+                AUltimate -= 0.00005;
+                  uint8_t data[24];
+
+        String Ultimate = String("Ultimate") + String(AUltimate, 8);
+        for (int i = 0; i < Ultimate.length(); i++)
+        {
+            data[i] = Ultimate.charAt(i);
+        }
+        rf95.send(data, Ultimate.length());
+            }
+
+
+            if (strcmp((char *)buf, "key:e") == 0)
+            {
+                APeriod += 0.05;
+                  uint8_t data[24];
+
+        String Period = String("Period") + String(APeriod, 8);
+        for (int i = 0; i < Period.length(); i++)
+        {
+            data[i] = Period.charAt(i);
+        }
+        rf95.send(data, Period.length());
             }
 
             if (strcmp((char *)buf, "key:d") == 0)
             {
-                rollSetpoint = -0.1;
-            }
+                APeriod -= 0.05;
+             uint8_t data[24];
+
+        String Period = String("Period") + String(APeriod, 8);
+        for (int i = 0; i < Period.length(); i++)
+        {
+            data[i] = Period.charAt(i);
+        }
+        rf95.send(data, Period.length());
+            }                     
         }
     }
 
@@ -335,13 +459,14 @@ void loop()
 
     if (motorMode == Arm && millis() - armTime > 10000)
     {
-        altitudeSetpoint = alt + 0; // meter
+        altitudeSetpoint = alt + 0.91; // meter
         motorMode = Disabled;
     }
 
     if (motorMode != Arm && accel.acceleration.z < 0.0)
     {
         motorMode = Disabled;
+
     }
 
 
@@ -355,49 +480,111 @@ void loop()
 
         PITCH U=0.0012 because P oscillated then during testing
         T = ~1 Second   
+   
+   
+   
+   //(0.6*AUltimate), (1.2*(AUltimate/APeriod)), ((3*AUltimate*APeriod)/40)
+   
     */
-
-     double PUltimate = 0.0017; 
-     double PPeriod = 0.8; 
-//double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
-    
-     double RUltimate = 0.0022;
-     double RPeriod = 0.50;
-//double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
-
-     double YUltimate = 0.0017;
-     double YPeriod = 2.5;
-//double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
-
-     double AUltimate = 0;
-     double APeriod = 0;
 
     //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
     double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
     double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
-    double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
-    double altOutput   = pidCalculate(alt, altitudeSetpoint,    0.000,   0.0001, 0.0,    &altPrev,   &altSum,   0.0, timeDiff) + 0.565; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
+    double yawOutput   = pidCalculate(gyroYaw,   0.0,   0, 0, 0,    &yawPrev,   &yawSum,   1, timeDiff);
+    double altOutput   = pidCalculate(alt, altitudeSetpoint,  AUltimate, 0, 0,    &altPrev,   &altSum,   1, timeDiff) + constanthovering; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
+    double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
+    double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
+    double BLout = altOutput + rollOuput - pitchOutput - yawOutput;
+    double BRout = altOutput - rollOuput - pitchOutput + yawOutput;
+    double Wingup = 0.3;
 
-    if (motorMode != Arm && motorMode != Disabled)
-    {
-        double Hover = 0.3;
-        double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
-        double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
-        double BLout = altOutput + rollOuput - pitchOutput - yawOutput;
-        double BRout = altOutput - rollOuput - pitchOutput + yawOutput;
+  //  if ((alt >= (altitudeSetpoint + 0.5)) && motorMode == Hold) 
+  //  {
+  //    setMotor(escFL, 0.5, true);
+  //    setMotor(escFR, 0.5, false);
+  //    setMotor(escBL, 0.5, false);
+  //    setMotor(escBR, 0.5, true);  
+  //    Serial.println("DROPPING");
+  //  }
 
-        setMotor(escFL, FLout > Hover ? FLout : Hover, true);
-        setMotor(escFR, FRout > Hover ? FRout : Hover, false);
-        setMotor(escBL, (BLout > Hover ? BLout  : Hover) / 1.391, false);
-        setMotor(escBR, BRout > Hover ? BRout : Hover, true);
+    if ((motorMode == Hold) && (alt <= (altitudeSetpoint + 0.5)))
+    { 
+        //         IF PID greater than wingup true : false    && FLout < maxvalue
+        setMotor(escFL, FLout > Wingup ? (FLout < maxvalue ? FLout : maxvalue) : Wingup, true);
+        setMotor(escFR, FRout > Wingup ? (FRout < maxvalue ? FRout : maxvalue) : Wingup, false);
+        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : Wingup) / 1.391, false);
+        setMotor(escBR, BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : Wingup, true);
+        
+        if (maxvalue <= 0.99)
+        {
+            maxvalue = (maxvalue + 0.002);
+        }
+        else
+        {
+            maxvalue = 1;
+        }
     }
-    else
+
+    
+    if (motorMode == Starting)
+    {
+    Serial.println("Starting");
+    Serial.println(currentvalue);
+        if (currentvalue <= 0.29)
+        {
+            currentvalue = (currentvalue + 0.001);
+        }
+        else
+        {
+            currentvalue = 0.3;
+            maxvalue = 0.3;
+            motorMode = Hold;
+        }
+       setMotor(escFL, currentvalue, true);
+       setMotor(escFR, currentvalue, false);
+       setMotor(escBL, currentvalue / 1.391, false);
+       setMotor(escBR, currentvalue, true); 
+    }
+
+    if (motorMode == Arm || motorMode == Disabled)
     {
         setMotor(escFL, 0.0);
         setMotor(escFR, 0.0);
         setMotor(escBL, 0.0);
         setMotor(escBR, 0.0);
     }
+
+if (motorMode == Land)
+{
+    Serial.println("Landing");
+    Serial.println(maxvalue);
+//           IF PID greater than wingup true : false    && FLout < maxvalue
+        setMotor(escFL, FLout > Wingup ? (FLout < maxvalue ? FLout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), true);
+        setMotor(escFR, FRout > Wingup ? (FRout < maxvalue ? FRout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), false);
+        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue)) / 1.391, false);
+        setMotor(escBR, BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), true);
+        
+        if (maxvalue >= 0.24)
+        {
+            maxvalue = (maxvalue - 0.0005);
+        }
+        else
+        {
+            maxvalue = 0;
+            motorMode = Disabled;
+        }
+}
+
+
+/*   // Arm,
+  //  Disabled,
+    Hold,
+    NavigateHands,
+    NavigateRocket,
+    Land,
+   // Starting */
+
+
 
     if (time - printTime > 1000000)
     {
