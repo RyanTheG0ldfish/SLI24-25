@@ -1,22 +1,27 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Servo.h>
-#include <Adafruit_BMP3XX.h>
+//#include <Adafruit_BMP3XX.h>
 #include <Adafruit_LSM6DSO32.h>
 #include <SoftwareSerial.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <RH_RF95.h>
 #include <TinyGPSPlus.h>
+#include <SimpleKalmanFilter.h>
 
 RH_RF95 rf95(10, 7); // Singleton instance of the radio driver
 
-#define BMP_CS 6
-#define SEALEVELPRESSURE_HPA (1021.3)
+SimpleKalmanFilter simpleKalmanFilter(1, 1, 1);
+const long SERIAL_REFRESH_TIME = 100;
+long refresh_time;
+
+//#define BMP_CS 6
+//#define SEALEVELPRESSURE_HPA (1021.3)
 
 #define LSM_CS 9 // For SPI mode, we need a CS pin
 
-Adafruit_BMP3XX bmp; // bmp390
+//Adafruit_BMP3XX bmp; // bmp390
 Adafruit_LSM6DSO32 dso32;
 
 Servo escFL;
@@ -50,6 +55,7 @@ double gyroYaw;
 bool ReadySwitch = false;
 double currentvalue = 0.00;
 double maxvalue = 0.00;
+double gravity = 10.201;
 
 enum MotorMode
 {
@@ -72,23 +78,28 @@ double yawSum;
 double yawPrev;
 double altSum;
 double altPrev;
+double velClimb = 0;
+double ax = 0;
+double az = 0;
+double vx = 0;
+double vz = 0;
 
      double PUltimate = 0.0017; 
      double PPeriod = 0.8; 
 //double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
     
-     double RUltimate = 0.0022;
-     double RPeriod = 0.50;
+     double RUltimate = 0.0035; //0.01
+     double RPeriod = 0.002;    //20
 //double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
 
      double YUltimate = 0.0017;
      double YPeriod = 2.5;
 //double yawOutput   = pidCalculate(gyroYaw,   0.0,   (0.6*YUltimate), (1.2*(YUltimate/YPeriod)), ((3*YUltimate*YPeriod)/40),    &yawPrev,   &yawSum,   1, timeDiff);
 
-     double AUltimate = 0.0099;
-     double APeriod = 0;
+     double AUltimate = 1;
+     double APeriod = 1;
 
-     double constanthovering = 0.40;
+     double constanthovering = 0.57;
 
 
 double pidCalculate(double input, double setpoint, double p, double i, double d, double* const &prevError, double* const &errorSum, double outputRange, double timeDiff)
@@ -103,9 +114,9 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
         *errorSum = (*errorSum < -maxSum) ? -maxSum : (*errorSum > maxSum) ? maxSum : *errorSum;
     }
 
-    double pTerm = p * error;
-    double iTerm = i * *errorSum;
-    double dTerm = d * (error - *prevError) * timeDiff;
+    double pTerm = p * error; //Remained the same
+    double iTerm = i * *errorSum; // i * *errorSum;
+    double dTerm = d * (error - *prevError) * timeDiff; //used to be d * (error - *prevError) * timeDiff);
 
     double output = pTerm + iTerm + dTerm;
 
@@ -124,21 +135,21 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
 {
-    Serial.println();
-    Serial.print("Temp: ");
-    Serial.print((bmp.temperature * 1.8) + 32);
-    Serial.println(" F");
-    Serial.print("Pres.: ");
-    Serial.print(bmp.pressure / 100.0);
-    Serial.println(" hPa");
-    Serial.print("Alt: ");
-    Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084);
-    Serial.print(" ft ");
-    Serial.println(altitudeSetpoint * 3.28084);
+  //  Serial.println();
+  //  Serial.print("Temp: ");
+  //  Serial.print((bmp.temperature * 1.8) + 32);
+  //  Serial.println(" F");
+  //  Serial.print("Pres.: ");
+  //  Serial.print(bmp.pressure / 100.0);
+  // Serial.println(" hPa");
+  //  Serial.print("Alt: ");
+  //  Serial.print(bmp.readAltitude(SEALEVELPRESSURE_HPA) * 3.28084);
+  //  Serial.print(" ft ");
+  //  Serial.println(altitudeSetpoint * 3.28084);
 
-    Serial.print("Temperature ");
-    Serial.print((temp.temperature) * 1.8 + 32);
-    Serial.println(" F");
+  //  Serial.print("Temperature ");
+  //  Serial.print((temp.temperature) * 1.8 + 32);
+  //  Serial.println(" F");
 
     /* Display the results (acceleration is measured in m/s^2) */
     Serial.print("Accel X: ");
@@ -233,18 +244,18 @@ void setup()
     if (!rf95.init())
         Serial.println("Radio init failed");
 
-    if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
-    {
-        Serial.println("Could not find a valid BMP3 sensor, check wiring!");
-        while (true)
-            ;
-    }
+    //if (!bmp.begin_SPI(BMP_CS)) // hardware SPI mode
+   // {
+    //    Serial.println("Could not find a valid BMP3 sensor, check wiring!");
+    //    while (true)
+      //      ;
+    //}
 
     // Set up oversampling and filter initialization
-    bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
-    bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
-    bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
-    bmp.setOutputDataRate(BMP3_ODR_50_HZ);
+   // bmp.setTemperatureOversampling(BMP3_OVERSAMPLING_8X);
+   // bmp.setPressureOversampling(BMP3_OVERSAMPLING_4X);
+   // bmp.setIIRFilterCoeff(BMP3_IIR_FILTER_COEFF_3);
+   // bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
     if (!dso32.begin_SPI(LSM_CS))
     {
@@ -259,10 +270,10 @@ void setup()
     dso32.setAccelDataRate(LSM6DS_RATE_52_HZ);
     dso32.setGyroDataRate(LSM6DS_RATE_12_5_HZ);
 
-    escFL.attach(4);
-    escFR.attach(18);
-    escBL.attach(2);
-    escBR.attach(3);
+    escFL.attach(2);
+    escFR.attach(3);
+    escBL.attach(4);
+    escBR.attach(5);
 
     escFL.writeMicroseconds(output);
     escFR.writeMicroseconds(output);
@@ -282,6 +293,10 @@ void loop()
 
     pitchSetpoint /= 1.008;
     rollSetpoint /= 1.008;
+
+  float velkalmon = velClimb;
+  float estimated_velocity = simpleKalmanFilter.updateEstimate(velkalmon);
+
 
     if (rf95.available())
     {
@@ -353,7 +368,7 @@ void loop()
             
             if (strcmp((char *)buf, "key:q") == 0)
             {
-                altitudeSetpoint += 0.003048;
+                altitudeSetpoint += (0.003048*100);
                   uint8_t data[24];
 
         String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
@@ -362,11 +377,18 @@ void loop()
             data[i] = altitude.charAt(i);
         }
         rf95.send(data, altitude.length());
+
+      //   String readaltitude = String("readAltitude") + String((bmp.readAltitude(SEALEVELPRESSURE_HPA)*3.280839895), 8);
+      //  for (int i = 0; i < readaltitude.length(); i++)
+      //  {
+      //      data[i] = readaltitude.charAt(i);
+      //  }
+      //  rf95.send(data, readaltitude.length());
             }
 
             if (strcmp((char *)buf, "key:a") == 0)
             {
-                altitudeSetpoint -= 0.003048;
+                altitudeSetpoint -= (0.003048*100);
                   uint8_t data[24];
 
         String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
@@ -375,14 +397,21 @@ void loop()
             data[i] = altitude.charAt(i);
         }
         rf95.send(data, altitude.length());
+
+        // String readaltitude = String("readAltitude") + String((bmp.readAltitude(SEALEVELPRESSURE_HPA)*3.280839895), 8);
+        //for (int i = 0; i < readaltitude.length(); i++)
+       // {
+       //     data[i] = readaltitude.charAt(i);
+       // }
+       // rf95.send(data, readaltitude.length());
             }
 
             if (strcmp((char *)buf, "key:w") == 0)
             {
-                AUltimate += 0.00005;
+                RUltimate += 0.0005;
                   uint8_t data[24];
 
-        String Ultimate = String("Ultimate") + String(AUltimate, 8);
+        String Ultimate = String("Ultimate") + String(RUltimate, 8);
         for (int i = 0; i < Ultimate.length(); i++)
         {
             data[i] = Ultimate.charAt(i);
@@ -392,10 +421,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:s") == 0)
             {
-                AUltimate -= 0.00005;
+                RUltimate -= 0.0005;
                   uint8_t data[24];
 
-        String Ultimate = String("Ultimate") + String(AUltimate, 8);
+        String Ultimate = String("Ultimate") + String(RUltimate, 8);
         for (int i = 0; i < Ultimate.length(); i++)
         {
             data[i] = Ultimate.charAt(i);
@@ -406,10 +435,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:e") == 0)
             {
-                APeriod += 0.05;
+                RPeriod += 0.0005;
                   uint8_t data[24];
 
-        String Period = String("Period") + String(APeriod, 8);
+        String Period = String("Period") + String(RPeriod, 8);
         for (int i = 0; i < Period.length(); i++)
         {
             data[i] = Period.charAt(i);
@@ -419,10 +448,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:d") == 0)
             {
-                APeriod -= 0.05;
+                RPeriod -= 0.0005;
              uint8_t data[24];
 
-        String Period = String("Period") + String(APeriod, 8);
+        String Period = String("Period") + String(RPeriod, 8);
         for (int i = 0; i < Period.length(); i++)
         {
             data[i] = Period.charAt(i);
@@ -437,10 +466,10 @@ void loop()
         gps.encode(Serial1.read());
     }
 
-    if (!bmp.performReading())
-    {
-        Serial.println("Failed to perform altimeter reading");
-    }
+    //if (!bmp.performReading())
+    //{
+    //    Serial.println("Failed to perform altimeter reading");
+    //}
 
     //  /* Get a new normalized sensor event */
     sensors_event_t accel;
@@ -451,15 +480,23 @@ void loop()
         Serial.println("Failed to perform gyro reading");
     }
 
-    gyroRoll = -atan(accel.acceleration.x / sqrt(accel.acceleration.y * accel.acceleration.y + accel.acceleration.z * accel.acceleration.z)) * 1 / (3.142 / 180);
-    gyroPitch = atan(accel.acceleration.y / sqrt(accel.acceleration.x * accel.acceleration.x + accel.acceleration.z * accel.acceleration.z)) * 1 / (3.142 / 180);
+    gyroRoll = (-atan(accel.acceleration.x / sqrt(accel.acceleration.y * accel.acceleration.y + accel.acceleration.z * accel.acceleration.z)) * 1 / (3.142 / 180)) - 0.66;
+    gyroPitch = (atan(accel.acceleration.y / sqrt(accel.acceleration.x * accel.acceleration.x + accel.acceleration.z * accel.acceleration.z)) * 1 / (3.142 / 180)) - 1.78;
     gyroYaw += (gyro.gyro.z + 0.008) * timeDiff / (3.142 / 180);
+    
+    /*
+    ax = ((accel.acceleration.x-0.07)-(gravity*sin(gyroPitch-2)));
+    vx = (ax*timeDiff);
+    az = (accel.acceleration.z-(gravity*cos(gyroPitch-2)));;
+    vz = (az*timeDiff);
+    velClimb = ((vz*cos(gyroPitch-2))-(vx*sin(gyroPitch-2)));
+*/
 
-    double alt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
+    //double alt = bmp.readAltitude(SEALEVELPRESSURE_HPA);
 
     if (motorMode == Arm && millis() - armTime > 10000)
     {
-        altitudeSetpoint = alt + 0.91; // meter
+       // altitudeSetpoint = alt - 18; // meter
         motorMode = Disabled;
     }
 
@@ -488,16 +525,18 @@ void loop()
     */
 
     //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
-    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
-    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
-    double yawOutput   = pidCalculate(gyroYaw,   0.0,   0, 0, 0,    &yawPrev,   &yawSum,   1, timeDiff);
-    double altOutput   = pidCalculate(alt, altitudeSetpoint,  AUltimate, 0, 0,    &altPrev,   &altSum,   1, timeDiff) + constanthovering; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
+    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, 0.00, 0, 0.00000, &pitchPrev, &pitchSum, 0, timeDiff);//p = 0.005      d   = 0.000006
+    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  RUltimate, 0, RPeriod, &rollPrev,  &rollSum,  1, timeDiff); //p = 0.005, d = 0.000003
+    double yawOutput   = pidCalculate(gyroYaw,   0.0,   0, 00, 0,    &yawPrev,   &yawSum,   0, timeDiff);
+    double altOutput   = pidCalculate(estimated_velocity, 0.0, 0, 0, 0,    &altPrev,   &altSum,   0, timeDiff) + constanthovering; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
+   // Serial.println(pitchOutput);        //velClimb or estimated_velocity
+  //  Serial.println(alt);
     double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
     double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
     double BLout = altOutput + rollOuput - pitchOutput - yawOutput;
     double BRout = altOutput - rollOuput - pitchOutput + yawOutput;
-    double Wingup = 0.3;
-
+    double Wingup = 0.33;
+   
   //  if ((alt >= (altitudeSetpoint + 0.5)) && motorMode == Hold) 
   //  {
   //    setMotor(escFL, 0.5, true);
@@ -506,33 +545,34 @@ void loop()
   //    setMotor(escBR, 0.5, true);  
   //    Serial.println("DROPPING");
   //  }
-
-    if ((motorMode == Hold) && (alt <= (altitudeSetpoint + 0.5)))
+// && (alt <= (altitudeSetpoint + 0.5)
+    if ((motorMode == Hold))
     { 
         //         IF PID greater than wingup true : false    && FLout < maxvalue
-        setMotor(escFL, FLout > Wingup ? (FLout < maxvalue ? FLout : maxvalue) : Wingup, true);
+        setMotor(escFL, (FLout > Wingup ? (FLout < maxvalue ? (FLout) : (maxvalue)) : Wingup) , true);
         setMotor(escFR, FRout > Wingup ? (FRout < maxvalue ? FRout : maxvalue) : Wingup, false);
-        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : Wingup) / 1.391, false);
+        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : Wingup) / 1.385, false);
         setMotor(escBR, BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : Wingup, true);
         
-        if (maxvalue <= 0.99)
+       // Serial.println(FLout);
+
+        if (maxvalue <= 0.8)
         {
-            maxvalue = (maxvalue + 0.002);
+            maxvalue = (maxvalue + (0.00015));
         }
         else
         {
-            maxvalue = 1;
+            maxvalue = 0.8;
         }
     }
 
     
     if (motorMode == Starting)
     {
-    Serial.println("Starting");
     Serial.println(currentvalue);
         if (currentvalue <= 0.29)
         {
-            currentvalue = (currentvalue + 0.001);
+            currentvalue = (currentvalue + (0.0001));
         }
         else
         {
@@ -561,12 +601,12 @@ if (motorMode == Land)
 //           IF PID greater than wingup true : false    && FLout < maxvalue
         setMotor(escFL, FLout > Wingup ? (FLout < maxvalue ? FLout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), true);
         setMotor(escFR, FRout > Wingup ? (FRout < maxvalue ? FRout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), false);
-        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue)) / 1.391, false);
+        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue)) / 1.385, false);
         setMotor(escBR, BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : (Wingup > maxvalue ? Wingup : maxvalue), true);
         
         if (maxvalue >= 0.24)
         {
-            maxvalue = (maxvalue - 0.0005);
+            maxvalue = (maxvalue - (0.0005/8));
         }
         else
         {
@@ -589,9 +629,11 @@ if (motorMode == Land)
     if (time - printTime > 1000000)
     {
         printTime = time;
-        Serial.print(timeDiff, 6);
+        Serial.println(timeDiff, 6);
         printData(temp, accel, gyro);
     }
+
+delay(1);
 
     lastTime = time;
 }
