@@ -16,8 +16,8 @@ Adafruit_BMP3XX bmp = Adafruit_BMP3XX(); // Initializes the bmp3xx driver
 #define SEALEVELPRESSURE_HPA (1013.25)   // Sea Level Pressure
 
 // Stepper Motors
-AccelStepper motor1(1, 8, 9);   //(1, 8, 9) where 1 = driver board, 8 = pinStep, and 9 = pinDirection
-AccelStepper motor2(1, 14, 15); // Defining related pins for the motor driver
+AccelStepper motor1(AccelStepper::DRIVER, 8, 9); //8 = pinStep and 9 = pinDirection
+AccelStepper motor2(AccelStepper::DRIVER, 14, 15);
 
 Servo servo1; // create servo object #1 to control servo 1
 Servo servo2; // create servo object #2 to control servo 2
@@ -82,10 +82,10 @@ void setup()
     bmp.setOutputDataRate(BMP3_ODR_50_HZ);
 
     // Stepper Motors
-    motor1.setMaxSpeed(100);
-    motor1.setAcceleration(10);
-    motor2.setMaxSpeed(100);
-    motor2.setAcceleration(10);
+    motor1.setMaxSpeed(4000);
+    motor1.setAcceleration(100);
+    motor2.setMaxSpeed(4000);
+    motor2.setAcceleration(100);
 
     pinMode(6, OUTPUT); // M0 - Setting the step pin to high to initialize full step control
     digitalWrite(6, LOW);
@@ -97,6 +97,9 @@ void setup()
     servo2.attach(19); // attaches the servo on pin 9 to the servo object
     servo1.write(180); // Set Servos - Values are from 0 to 180
     servo2.write(0);   // Set Servos - Values are from 0 to 180
+
+    motor1.moveTo(-100000);
+    motor2.moveTo(-100000);
 }
 
 void loop()

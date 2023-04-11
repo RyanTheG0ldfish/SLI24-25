@@ -84,12 +84,13 @@ double az = 0;
 double vx = 0;
 double vz = 0;
 
-     double PUltimate = 0.0017; 
-     double PPeriod = 0.8; 
+     double PitchPValue = 0.013; 
+     double PitchDValue = 0.0; 
+     double PitchIValue = 0.0;
 //double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
     
-     double RUltimate = 0.0035; //0.01
-     double RPeriod = 0.002;    //20
+     double RUltimate = 0; //0.01 //1
+     double RPeriod = 0;   //1.35
 //double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  (0.6*RUltimate), (1.2*(RUltimate/RPeriod)), ((3*RUltimate*RPeriod)/40), &rollPrev,  &rollSum,  1, timeDiff);
 
      double YUltimate = 0.0017;
@@ -99,7 +100,7 @@ double vz = 0;
      double AUltimate = 1;
      double APeriod = 1;
 
-     double constanthovering = 0.57;
+     double constanthovering = 0.7;
 
 
 double pidCalculate(double input, double setpoint, double p, double i, double d, double* const &prevError, double* const &errorSum, double outputRange, double timeDiff)
@@ -116,7 +117,8 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
 
     double pTerm = p * error; //Remained the same
     double iTerm = i * *errorSum; // i * *errorSum;
-    double dTerm = d * (error - *prevError) * timeDiff; //used to be d * (error - *prevError) * timeDiff);
+    double dTerm = d * (error - *prevError) / timeDiff; //used to be d * (error - *prevError) * timeDiff);
+Serial.println(dTerm);
 
     double output = pTerm + iTerm + dTerm;
 
@@ -131,6 +133,8 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
     }
 
     return output;
+
+    *prevError = error;
 }
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
@@ -339,10 +343,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:r") == 0)
             {
-               constanthovering += 0.001;
+               PitchIValue += 0.001;
              uint8_t data[24];
 
-        String Ahovering = String("Hover") + String(constanthovering, 8);
+        String Ahovering = String("PitchI") + String(PitchIValue, 8);
         for (int i = 0; i < Ahovering.length(); i++)
         {
             data[i] = Ahovering.charAt(i);
@@ -352,10 +356,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:f") == 0)
             {
-                constanthovering -= 0.001;
+                PitchIValue -= 0.001;
              uint8_t data[24];
 
-        String Ahovering = String("Hover") + String(constanthovering, 8);
+        String Ahovering = String("Hover") + String(PitchIValue, 8);
         for (int i = 0; i < Ahovering.length(); i++)
         {
             data[i] = Ahovering.charAt(i);
@@ -363,55 +367,13 @@ void loop()
         rf95.send(data, Ahovering.length());
             }   
             
-            
-            
-            
-            if (strcmp((char *)buf, "key:q") == 0)
-            {
-                altitudeSetpoint += (0.003048*100);
-                  uint8_t data[24];
-
-        String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
-        for (int i = 0; i < altitude.length(); i++)
-        {
-            data[i] = altitude.charAt(i);
-        }
-        rf95.send(data, altitude.length());
-
-      //   String readaltitude = String("readAltitude") + String((bmp.readAltitude(SEALEVELPRESSURE_HPA)*3.280839895), 8);
-      //  for (int i = 0; i < readaltitude.length(); i++)
-      //  {
-      //      data[i] = readaltitude.charAt(i);
-      //  }
-      //  rf95.send(data, readaltitude.length());
-            }
-
-            if (strcmp((char *)buf, "key:a") == 0)
-            {
-                altitudeSetpoint -= (0.003048*100);
-                  uint8_t data[24];
-
-        String altitude = String("Altitude") + String((altitudeSetpoint*3.280839895), 8);
-        for (int i = 0; i < altitude.length(); i++)
-        {
-            data[i] = altitude.charAt(i);
-        }
-        rf95.send(data, altitude.length());
-
-        // String readaltitude = String("readAltitude") + String((bmp.readAltitude(SEALEVELPRESSURE_HPA)*3.280839895), 8);
-        //for (int i = 0; i < readaltitude.length(); i++)
-       // {
-       //     data[i] = readaltitude.charAt(i);
-       // }
-       // rf95.send(data, readaltitude.length());
-            }
 
             if (strcmp((char *)buf, "key:w") == 0)
             {
-                RUltimate += 0.0005;
+                PitchPValue += 0.0001;
                   uint8_t data[24];
 
-        String Ultimate = String("Ultimate") + String(RUltimate, 8);
+        String Ultimate = String("PitchP ") + String(PitchPValue, 8);
         for (int i = 0; i < Ultimate.length(); i++)
         {
             data[i] = Ultimate.charAt(i);
@@ -421,10 +383,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:s") == 0)
             {
-                RUltimate -= 0.0005;
+                PitchPValue -= 0.0001;
                   uint8_t data[24];
 
-        String Ultimate = String("Ultimate") + String(RUltimate, 8);
+        String Ultimate = String("PitchP ") + String(PitchPValue, 8);
         for (int i = 0; i < Ultimate.length(); i++)
         {
             data[i] = Ultimate.charAt(i);
@@ -435,10 +397,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:e") == 0)
             {
-                RPeriod += 0.0005;
+                PitchDValue += 0.0001;
                   uint8_t data[24];
 
-        String Period = String("Period") + String(RPeriod, 8);
+        String Period = String("PitchD ") + String(PitchDValue, 8);
         for (int i = 0; i < Period.length(); i++)
         {
             data[i] = Period.charAt(i);
@@ -448,10 +410,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:d") == 0)
             {
-                RPeriod -= 0.0005;
+                PitchDValue -= 0.0001;
              uint8_t data[24];
 
-        String Period = String("Period") + String(RPeriod, 8);
+        String Period = String("PitchD ") + String(PitchDValue, 8);
         for (int i = 0; i < Period.length(); i++)
         {
             data[i] = Period.charAt(i);
@@ -525,11 +487,11 @@ void loop()
     */
 
     //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
-    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, 0.00, 0, 0.00000, &pitchPrev, &pitchSum, 0, timeDiff);//p = 0.005      d   = 0.000006
-    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  RUltimate, 0, RPeriod, &rollPrev,  &rollSum,  1, timeDiff); //p = 0.005, d = 0.000003
+    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.2*PitchPValue), ((0.4*PitchPValue)/0.5), (0.066*0.5*PitchPValue), &pitchPrev, &pitchSum, 1, timeDiff);//p = 0.005      d   = 0.000006
+    double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  0.000, 0.00, 0, &rollPrev,  &rollSum,  0, timeDiff); //p = 0.005, d = 0.000003
     double yawOutput   = pidCalculate(gyroYaw,   0.0,   0, 00, 0,    &yawPrev,   &yawSum,   0, timeDiff);
     double altOutput   = pidCalculate(estimated_velocity, 0.0, 0, 0, 0,    &altPrev,   &altSum,   0, timeDiff) + constanthovering; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
-   // Serial.println(pitchOutput);        //velClimb or estimated_velocity
+    //Serial.println(pitchOutput);        //velClimb or estimated_velocity
   //  Serial.println(alt);
     double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
     double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
@@ -549,20 +511,19 @@ void loop()
     if ((motorMode == Hold))
     { 
         //         IF PID greater than wingup true : false    && FLout < maxvalue
-        setMotor(escFL, (FLout > Wingup ? (FLout < maxvalue ? (FLout) : (maxvalue)) : Wingup) , true);
+        setMotor(escFL, (FLout > Wingup ? (FLout < maxvalue ? (FLout) : (maxvalue)) : Wingup) * 1, true);
         setMotor(escFR, FRout > Wingup ? (FRout < maxvalue ? FRout : maxvalue) : Wingup, false);
-        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : Wingup) / 1.385, false);
-        setMotor(escBR, BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : Wingup, true);
+        setMotor(escBL, (BLout > Wingup ? (BLout < maxvalue ? BLout : maxvalue) : Wingup) / 1.385 * 1.075, false);
+        setMotor(escBR, (BRout > Wingup ? (BRout < maxvalue ? BRout : maxvalue) : Wingup) * 1.005, true);
         
-       // Serial.println(FLout);
 
-        if (maxvalue <= 0.8)
+        if (maxvalue <= 0.92)
         {
             maxvalue = (maxvalue + (0.00015));
         }
         else
         {
-            maxvalue = 0.8;
+            maxvalue = 0.92;
         }
     }
 
