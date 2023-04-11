@@ -84,9 +84,9 @@ double az = 0;
 double vx = 0;
 double vz = 0;
 
-     double PitchPValue = 0.013; 
-     double PitchDValue = 0.0; 
-     double PitchIValue = 0.0;
+     double PitchPValue = 0.0013; 
+     double PitchDValue = 0.0000075; 
+     double PitchIValue = 0.00001;
 //double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
     
      double RUltimate = 0; //0.01 //1
@@ -118,9 +118,11 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
     double pTerm = p * error; //Remained the same
     double iTerm = i * *errorSum; // i * *errorSum;
     double dTerm = d * (error - *prevError) / timeDiff; //used to be d * (error - *prevError) * timeDiff);
-Serial.println(dTerm);
+   // Serial.println(error);
+    //Serial.println(error-*prevError);
 
     double output = pTerm + iTerm + dTerm;
+    *prevError = error;
 
     if (output < -outputRange && outputRange >= 0.0)
     {
@@ -131,10 +133,8 @@ Serial.println(dTerm);
     {
         output = outputRange;
     }
-
+   
     return output;
-
-    *prevError = error;
 }
 
 void printData(sensors_event_t temp, sensors_event_t accel, sensors_event_t gyro)
@@ -343,7 +343,7 @@ void loop()
 
             if (strcmp((char *)buf, "key:r") == 0)
             {
-               PitchIValue += 0.001;
+               PitchIValue += 0.00001;
              uint8_t data[24];
 
         String Ahovering = String("PitchI") + String(PitchIValue, 8);
@@ -356,10 +356,10 @@ void loop()
 
             if (strcmp((char *)buf, "key:f") == 0)
             {
-                PitchIValue -= 0.001;
+                PitchIValue -= 0.00001;
              uint8_t data[24];
 
-        String Ahovering = String("Hover") + String(PitchIValue, 8);
+        String Ahovering = String("PitchI ") + String(PitchIValue, 8);
         for (int i = 0; i < Ahovering.length(); i++)
         {
             data[i] = Ahovering.charAt(i);
@@ -485,13 +485,13 @@ void loop()
    //(0.6*AUltimate), (1.2*(AUltimate/APeriod)), ((3*AUltimate*APeriod)/40)
    
     */
-
+        // double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.2*PitchPValue), ((0.4*PitchPValue)/0.5), (0.066*0.5*PitchPValue), &pitchPrev, &pitchSum, 1, timeDiff);
     //                                current,   sp,            p,      i,        d,       prev,        sum,     range,  dt
-    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.2*PitchPValue), ((0.4*PitchPValue)/0.5), (0.066*0.5*PitchPValue), &pitchPrev, &pitchSum, 1, timeDiff);//p = 0.005      d   = 0.000006
+    double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, PitchPValue, PitchIValue, PitchDValue, &pitchPrev, &pitchSum, 1, timeDiff);//p = 0.005      d   = 0.000006
     double rollOuput   = pidCalculate(gyroRoll,  rollSetpoint,  0.000, 0.00, 0, &rollPrev,  &rollSum,  0, timeDiff); //p = 0.005, d = 0.000003
     double yawOutput   = pidCalculate(gyroYaw,   0.0,   0, 00, 0,    &yawPrev,   &yawSum,   0, timeDiff);
     double altOutput   = pidCalculate(estimated_velocity, 0.0, 0, 0, 0,    &altPrev,   &altSum,   0, timeDiff) + constanthovering; //0.565 is hover speed -- 0.46 is sit on ground and spin speed
-    //Serial.println(pitchOutput);        //velClimb or estimated_velocity
+    Serial.println(pitchOutput);        //velClimb or estimated_velocity
   //  Serial.println(alt);
     double FLout = altOutput + rollOuput + pitchOutput + yawOutput;
     double FRout = altOutput - rollOuput + pitchOutput - yawOutput;
