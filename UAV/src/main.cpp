@@ -85,8 +85,8 @@ double vx = 0;
 double vz = 0;
 
      double PitchPValue = 0.0013; 
+    double PitchIValue = 0.00001;
      double PitchDValue = 0.0000075; 
-     double PitchIValue = 0.00001;
 //double pitchOutput = pidCalculate(gyroPitch, pitchSetpoint, (0.6*PUltimate), (1.2*(PUltimate/PPeriod)), ((3*PUltimate*PPeriod)/40), &pitchPrev, &pitchSum, 1, timeDiff);
     
      double RUltimate = 0; //0.01 //1
@@ -118,7 +118,7 @@ double pidCalculate(double input, double setpoint, double p, double i, double d,
     double pTerm = p * error; //Remained the same
     double iTerm = i * *errorSum; // i * *errorSum;
     double dTerm = d * (error - *prevError) / timeDiff; //used to be d * (error - *prevError) * timeDiff);
-   // Serial.println(error);
+    //Serial.println(error);
     //Serial.println(error-*prevError);
 
     double output = pTerm + iTerm + dTerm;
